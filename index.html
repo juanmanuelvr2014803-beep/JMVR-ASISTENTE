@@ -408,21 +408,16 @@
         </section>
         <section>
           <h2 class="section-title">Fondos</h2>
-          <div class="hint" style="margin-bottom:8px;">Toca "Ver" en cualquier fondo para desplegar aquí mismo su desglose de provisiones.</div>
-          <div class="card"><table class="grid-table"><thead><tr><th>Fondo</th><th>Provisionado</th><th>Consumido</th><th>Saldo final</th><th></th></tr></thead><tbody id="tbl-fondosResumen"></tbody></table></div>
-        </section>
-        <section id="resumenFondoDetalle" style="display:none;">
-          <h2 class="section-title" id="resumenFondoDetalleTitle">Detalle del fondo</h2>
-          <div class="summary-grid">
-            <div class="kpi grey"><div class="label">Provisionado (histórico)</div><div class="value" id="rfProvision">$0</div></div>
-            <div class="kpi"><div class="label">Consumido (histórico)</div><div class="value" id="rfConsumo">$0</div></div>
-            <div class="kpi grey"><div class="label">Saldo aprovisionado</div><div class="value" id="rfSaldoProv">$0</div></div>
+          <div class="credit-select"><select id="resumenFondoSelect"></select></div>
+          <div class="summary-grid" style="margin-top:8px;">
+            <div class="kpi"><div class="label">Saldo inicial</div><div class="value" id="rfSaldoInicial">$0</div></div>
+            <div class="kpi grey"><div class="label">Provisión</div><div class="value" id="rfProvision">$0</div></div>
           </div>
           <div class="summary-grid" style="margin-top:8px;">
-            <div class="kpi"><div class="label">Saldo inicial del mes</div><div class="value" id="rfSaldoInicial">$0</div></div>
-            <div class="kpi grey"><div class="label">Saldo final del mes</div><div class="value" id="rfSaldoFinal">$0</div></div>
+            <div class="kpi"><div class="label">Consumido</div><div class="value" id="rfConsumo">$0</div></div>
+            <div class="kpi grey"><div class="label">Saldo final</div><div class="value" id="rfSaldoFinal">$0</div></div>
           </div>
-          <div class="hint" style="margin-top:2px;">Lo provisionado es acumulado — lo que apartas y no gastas sigue disponible el mes siguiente.</div>
+          <div class="hint" style="margin-top:6px;">Provisión y Consumido son acumulados (históricos) — lo que apartas y no gastas sigue disponible el mes siguiente.</div>
         </section>
         <section>
           <h2 class="section-title">Uso tarjeta de crédito</h2>
@@ -477,7 +472,11 @@
             <label class="hint" style="margin-top:10px; display:block;">Cupo disponible que informa el banco (opcional, para conciliar)</label>
             <input type="text" id="tcCupoBanco" placeholder="Ej: 2.350.000" style="width:100%;border:1px solid var(--grey-200);border-radius:8px;padding:8px;margin:4px 0 10px;font-size:14px;">
             <div class="hint" id="tcConciliacion"></div>
-            <button class="btn btn-primary btn-sm" style="margin-top:10px;" onclick="openPagoDesdeBolsillo('tarjeta')">💳 Pagar tarjeta desde un bolsillo</button>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+              <button class="btn btn-primary btn-sm" id="tcProvisionarBtn" onclick="provisionarDeudaTarjeta()">🏷️ Provisionar toda la deuda en el bolsillo</button>
+              <button class="btn btn-primary btn-sm" onclick="openPagoDesdeBolsillo('tarjeta')">💳 Pagar tarjeta desde un bolsillo</button>
+            </div>
+            <div class="hint" style="margin-top:6px;">Esto ya pasa solo cada vez que asocias un bolsillo o cambias la deuda — este botón es por si quieres forzarlo a mano en cualquier momento.</div>
           </div></div>
         </section>
         <section>
@@ -1541,8 +1540,22 @@ function bindMoneyInputCustom(el, getVal, setVal){
    concepto del presupuesto puede mover el bolsillo distinto según el caso real. */
 function registrarMovimientoDesdeFila(r, tipoDefault){
   if(!r.fondoId){ showToast('Primero elige un fondo en esta fila'); return; }
-  const valor = tipoDefault==='ingreso' ? (r.ingresado||0) : (r.consumido||0);
   const tipoMov = r.tipoEnBolsillo || tipoDefault;
+  // Si se marca como Provisión, se aparta el valor PROVISIONADO (presupuestado) — todavía
+  // no se ha gastado/recibido de verdad, por eso no tiene sentido usar Consumido/Ingresado
+  // (que normalmente está en 0 hasta que el gasto o ingreso realmente ocurre).
+  let valor;
+  if(tipoMov === 'provision'){
+    valor = r.provision || 0;
+  } else if(tipoDefault === 'ingreso'){
+    valor = r.ingresado || 0;
+  } else {
+    valor = r.consumido || 0;
+  }
+  if(!valor){
+    showToast(tipoMov==='provision' ? 'La Provisión de esta fila está en 0 — no hay nada que apartar' : 'El valor real de esta fila está en 0');
+    return;
+  }
   const monto = tipoMov==='gasto' ? -Math.abs(valor) : Math.abs(valor);
   let mov = r.movId ? state.movimientos.find(m=>m.id===r.movId) : null;
   if(mov){
@@ -1599,7 +1612,8 @@ function renderIngresos(){
     const [c] = tr.querySelectorAll('input.txt');
     const [sel, fondoSel, tipoSel] = tr.querySelectorAll('select');
     const [p,i] = tr.querySelectorAll('input.money');
-    bindText(c,r,'concepto'); bindSelect(sel,r,'frecuencia',renderIngresosInforme); bindMoneyInput(p,r,'provision'); bindMoneyInput(i,r,'ingresado');
+    bindText(c,r,'concepto'); bindSelect(sel,r,'frecuencia',renderIngresosInforme); bindMoneyInput(p,r,'provision');
+    bindMoneyInput(i,r,'ingresado', ()=>{ liveRefreshFinanzas(); if(r.movId) registrarMovimientoDesdeFila(r, 'ingreso'); });
     fondoSel.addEventListener('change', ()=>{ r.fondoId = fondoSel.value; saveData(); });
     tipoSel.addEventListener('change', ()=>{
       r.tipoEnBolsillo = tipoSel.value; saveData();
@@ -1660,7 +1674,8 @@ function renderGastos(){
     const [c] = tr.querySelectorAll('input.txt');
     const [sel, fondoSel, tipoSel] = tr.querySelectorAll('select');
     const [p,co] = tr.querySelectorAll('input.money');
-    bindText(c,r,'concepto'); bindSelect(sel,r,'frecuencia',renderGastosInforme); bindMoneyInput(p,r,'provision'); bindMoneyInput(co,r,'consumido');
+    bindText(c,r,'concepto'); bindSelect(sel,r,'frecuencia',renderGastosInforme); bindMoneyInput(p,r,'provision');
+    bindMoneyInput(co,r,'consumido', ()=>{ liveRefreshFinanzas(); if(r.movId) registrarMovimientoDesdeFila(r, 'gasto'); });
     fondoSel.addEventListener('change', ()=>{ r.fondoId = fondoSel.value; saveData(); });
     tipoSel.addEventListener('change', ()=>{
       r.tipoEnBolsillo = tipoSel.value; saveData();
@@ -1797,6 +1812,17 @@ function renderRecurrentesList(){
    TODA la deuda actual — así ese bolsillo siempre muestra cuánto hay que apartar para
    cubrirla. Si cambias el bolsillo asociado o editas la deuda, esta provisión se
    actualiza o se mueve sola, sin dejar provisiones viejas huérfanas. */
+/* Botón explícito: fuerza a provisionar ahora mismo toda la deuda en el bolsillo
+   asociado (aunque ya pase solo con el cambio de deuda/bolsillo, este botón sirve
+   para forzarlo a mano si hace falta). */
+function provisionarDeudaTarjeta(){
+  const m = currentMonth();
+  if(!m.tarjeta.fondoAsociado){ showToast('Primero elige un bolsillo asociado arriba'); return; }
+  if(!(m.tarjeta.deuda>0)){ showToast('La deuda actual está en 0, no hay nada que provisionar'); return; }
+  syncTarjetaProvision();
+  refreshEverythingFinanzas();
+  showToast('✅ Provisionada toda la deuda (' + fmt(m.tarjeta.deuda) + ') en el bolsillo asociado');
+}
 function syncTarjetaProvision(){
   const m = currentMonth();
   const fondoId = m.tarjeta.fondoAsociado;
@@ -2344,46 +2370,28 @@ function renderResumenGastosTabla(){
 /* Tabla de todos los fondos con Provisionado / Consumido / Saldo final del mes en curso. */
 let resumenFondoSeleccionado = null;
 function renderFondosTabla(){
-  const tbody = document.getElementById('tbl-fondosResumen');
-  if(!tbody) return;
+  const sel = document.getElementById('resumenFondoSelect');
+  if(!sel) return;
   const fondos = flattenFondos();
-  if(fondos.length===0){ tbody.innerHTML = '<tr><td colspan="5" class="empty">Crea un banco y un bolsillo en la pestaña Bancos.</td></tr>'; document.getElementById('resumenFondoDetalle').style.display='none'; return; }
-  tbody.innerHTML = fondos.map(f=>{
-    const prov = provisionHistoricaFondo(f.id, state.current);
-    const cons = consumoHistoricoFondo(f.id, state.current);
-    const saldoFinal = saldoFinalBolsilloMes(f.id, state.current);
-    const isSel = resumenFondoSeleccionado===f.id;
-    return `<tr style="${isSel?'background:var(--grey-100);':''}">
-      <td><b>${f.bancoNombre} · ${f.nombre}</b></td>
-      <td class="num">${fmt(prov)}</td>
-      <td class="num">${fmt(cons)}</td>
-      <td class="num" style="font-weight:800;">${fmt(saldoFinal)}</td>
-      <td class="num"><button class="row-abono-btn ${isSel?'has-abono':''}" data-verfondo="${f.id}">${isSel?'Ocultar':'Ver'}</button></td>
-    </tr>`;
-  }).join('');
-  tbody.querySelectorAll('[data-verfondo]').forEach(b=>b.addEventListener('click', ()=>{
-    resumenFondoSeleccionado = resumenFondoSeleccionado===b.dataset.verfondo ? null : b.dataset.verfondo;
-    renderFondosTabla();
-    renderResumenFondoDetalle();
-  }));
+  if(fondos.length===0){
+    sel.innerHTML = '<option value="">Crea un bolsillo en Bancos primero</option>';
+    ['rfSaldoInicial','rfProvision','rfConsumo','rfSaldoFinal'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent='$0'; });
+    return;
+  }
+  if(!resumenFondoSeleccionado || !fondos.some(f=>f.id===resumenFondoSeleccionado)) resumenFondoSeleccionado = fondos[0].id;
+  sel.innerHTML = fondos.map(f=>`<option value="${f.id}" ${f.id===resumenFondoSeleccionado?'selected':''}>${f.bancoNombre} · ${f.nombre}</option>`).join('');
+  sel.onchange = ()=>{ resumenFondoSeleccionado = sel.value; renderResumenFondoDetalle(); };
   renderResumenFondoDetalle();
 }
-/* Desglose de provisiones de UN SOLO fondo, elegido con el botón "Ver" de la tabla de
-   arriba — aparece debajo del resumen de Ingresos y Gastos, sin salir de esta pestaña. */
+/* Muestra un solo fondo a la vez (el elegido en el selector de arriba), con exactamente
+   Saldo inicial / Provisión / Consumido / Saldo final — sin listar todos los fondos. */
 function renderResumenFondoDetalle(){
-  const sec = document.getElementById('resumenFondoDetalle');
-  if(!sec) return;
-  if(!resumenFondoSeleccionado){ sec.style.display='none'; return; }
+  if(!resumenFondoSeleccionado) return;
   const f = flattenFondos().find(x=>x.id===resumenFondoSeleccionado);
-  if(!f){ sec.style.display='none'; resumenFondoSeleccionado=null; return; }
-  sec.style.display='';
-  document.getElementById('resumenFondoDetalleTitle').textContent = 'Detalle: ' + f.bancoNombre + ' · ' + f.nombre;
-  const prov = provisionHistoricaFondo(f.id, state.current);
-  const cons = consumoHistoricoFondo(f.id, state.current);
-  document.getElementById('rfProvision').textContent = fmt(prov);
-  document.getElementById('rfConsumo').textContent = fmt(cons);
-  document.getElementById('rfSaldoProv').textContent = fmt(prov - cons);
+  if(!f) return;
   document.getElementById('rfSaldoInicial').textContent = fmt(saldoInicialBolsilloMes(f.id, state.current));
+  document.getElementById('rfProvision').textContent = fmt(provisionHistoricaFondo(f.id, state.current));
+  document.getElementById('rfConsumo').textContent = fmt(consumoHistoricoFondo(f.id, state.current));
   document.getElementById('rfSaldoFinal').textContent = fmt(saldoFinalBolsilloMes(f.id, state.current));
 }
 function renderFinAll(){
@@ -3975,13 +3983,45 @@ function handleSiriQuickCapture(){
   window.history.replaceState({}, document.title, window.location.origin + window.location.pathname);
 }
 
+/* Reparación única (se ejecuta cada vez que abres la app, pero no hace nada si ya
+   está todo bien): corrige movimientos ya registrados desde una fila de Ingreso/Gasto
+   cuyo monto había quedado en 0 por un error anterior — ahora usa el valor correcto
+   según la tipología (Provisión usa lo Provisionado, no lo Consumido/Ingresado real). */
+function repararMovimientosAnclados(){
+  let changed = false;
+  Object.values(state.months||{}).forEach(m=>{
+    (m.ingresos||[]).forEach(r=>{
+      if(!r.movId) return;
+      const mov = state.movimientos.find(mv=>mv.id===r.movId);
+      if(!mov) return;
+      const tipoMov = r.tipoEnBolsillo || 'ingreso';
+      const valor = tipoMov==='provision' ? (r.provision||0) : (r.ingresado||0);
+      const monto = tipoMov==='gasto' ? -Math.abs(valor) : Math.abs(valor);
+      if(mov.monto !== monto || mov.tipo !== tipoMov){ mov.monto = monto; mov.tipo = tipoMov; changed = true; }
+    });
+    (m.gastos||[]).forEach(r=>{
+      if(!r.movId) return;
+      const mov = state.movimientos.find(mv=>mv.id===r.movId);
+      if(!mov) return;
+      const tipoMov = r.tipoEnBolsillo || 'gasto';
+      const valor = tipoMov==='provision' ? (r.provision||0) : (r.consumido||0);
+      const monto = tipoMov==='gasto' ? -Math.abs(valor) : Math.abs(valor);
+      if(mov.monto !== monto || mov.tipo !== tipoMov){ mov.monto = monto; mov.tipo = tipoMov; changed = true; }
+    });
+  });
+  if(changed) saveData();
+  return changed;
+}
+
 /* ================= Inicio ================= */
+const seRepararon = repararMovimientosAnclados();
 materializarRecurrentes();
 renderFinAll();
 switchModule('finanzas');
 checkDueNotifications();
 if(state.perfil.appPinEnabled){ showAppLock(); } else { appUnlocked = true; }
 handleSiriQuickCapture();
+if(seRepararon) setTimeout(()=>showToast('Se corrigieron provisiones que habían quedado en $0'), 800);
 window.addEventListener('beforeunload', saveData);
 </script>
 
@@ -4191,4 +4231,3 @@ try{
 </script>
 </body>
 </html>
-
