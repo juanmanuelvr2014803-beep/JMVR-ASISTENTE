@@ -399,6 +399,10 @@
           </div>
         </section>
         <section>
+          <h2 class="section-title">Resumen por quincena</h2>
+          <div class="card"><table class="grid-table"><thead><tr><th></th><th>Ingreso</th><th>Gasto</th><th>Total</th></tr></thead><tbody id="tbl-resumenQuincenas"></tbody></table></div>
+        </section>
+        <section>
           <h2 class="section-title">Ingresos</h2>
           <div class="card"><table class="grid-table"><thead><tr><th>Ingresos</th><th>Provisión</th><th>Ingresado</th><th>Saldo</th></tr></thead><tbody id="tbl-resumenIngresos"></tbody></table></div>
         </section>
@@ -525,6 +529,7 @@
             </span>
           </div>
           <div class="hint" style="margin:6px 0 8px;">Cada movimiento con el saldo que queda justo después de él — entrada, salida y saldo corrido, todo junto, del más reciente al más antiguo.</div>
+          <div class="summary-grid" id="auxResumen" style="margin-bottom:10px;"></div>
           <div class="card"><table class="grid-table"><thead><tr><th>Fecha</th><th>Concepto</th><th>Entrada</th><th>Salida</th><th>Saldo</th><th></th></tr></thead><tbody id="tbl-auxiliar"></tbody></table></div>
         </section>
       </div>
@@ -816,13 +821,20 @@
 <!-- Modal: movimiento de flujo de caja -->
 <div class="modal-bg" id="movModalBg">
   <div class="modal">
-    <h3>Nuevo movimiento</h3>
+    <h3 id="movModalTitle">Nuevo movimiento</h3>
     <label>Tipo</label>
     <select id="movTipo">
       <option value="ingreso">Ingreso (+)</option>
       <option value="gasto">Gasto (−)</option>
-      <option value="provision">Provisión — aparta dinero, no cuenta como gasto (+)</option>
+      <option value="provision">Provisión — aparta dinero, no cuenta como gasto/ingreso real todavía</option>
     </select>
+    <div id="movDireccionRow" style="display:none;">
+      <label>Dirección de la provisión</label>
+      <select id="movDireccion">
+        <option value="entrada">Entrada — apartas dinero que esperas recibir (+)</option>
+        <option value="salida">Salida — apartas dinero que sabes que vas a gastar (−)</option>
+      </select>
+    </div>
     <label>Concepto</label>
     <input type="text" id="movConcepto" placeholder="Ej: Nómina, mercado, gasolina">
     <label>Valor</label>
@@ -831,6 +843,7 @@
     <input type="date" id="movFecha">
     <div class="actions">
       <button class="btn btn-ghost" onclick="closeModal('movModalBg')">Cancelar</button>
+      <button class="btn btn-danger" id="movDeleteBtn" style="display:none;" onclick="delMovDesdeModal()">Eliminar</button>
       <button class="btn btn-primary" onclick="saveMov()">Guardar</button>
     </div>
   </div>
@@ -875,6 +888,31 @@
       <button class="btn btn-ghost" onclick="closeModal('pagoModalBg')">Cancelar</button>
       <button class="btn btn-danger" id="pagoDeleteBtn" style="display:none;" onclick="deletePago()">Eliminar</button>
       <button class="btn btn-primary" onclick="savePago()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="pendienteModalBg">
+  <div class="modal">
+    <h3>Editar pendiente</h3>
+    <label>Texto</label>
+    <input type="text" id="pendEditTexto" placeholder="Escribe el pendiente">
+    <label>Fecha (opcional — aparece en el Calendario)</label>
+    <input type="date" id="pendEditFecha">
+    <label>Etiquetas de personas (separadas por coma)</label>
+    <input type="text" id="pendEditEtiquetas" placeholder="Ej: Saraí, trabajo">
+    <label style="display:flex; align-items:center; gap:8px; margin-top:12px;">
+      <input type="checkbox" id="pendEditRepetir" style="width:16px;height:16px;">
+      Repetir cada mes (como una tarifa fija: celular, luz, etc.)
+    </label>
+    <div id="pendEditDiaRow" style="display:none;">
+      <label>Día del mes en que debe aparecer</label>
+      <input type="number" min="1" max="31" id="pendEditDia" placeholder="Ej: 5">
+    </div>
+    <div class="hint">Si lo repites, cada mes se crea solo un pendiente nuevo con este mismo texto — marcarlo como hecho un mes no afecta a los siguientes.</div>
+    <div class="actions">
+      <button class="btn btn-ghost" onclick="closeModal('pendienteModalBg')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarPendienteEditado()">Guardar</button>
     </div>
   </div>
 </div>
@@ -1079,6 +1117,14 @@
     </div>
 
     <div class="settings-section">
+      <h4>Cargue masivo de Ingresos y Gastos (CSV)</h4>
+      <div class="hint">Sube un archivo .csv con columnas: <b>Mes, Tipo, Concepto, Frecuencia, Provision, Real, Fondo, TipoEnBolsillo</b>. Crea los meses que falten, y si un concepto+frecuencia ya existe en ese mes, lo actualiza en vez de duplicarlo.</div>
+      <button class="btn btn-primary" style="margin-top:8px; width:100%;" onclick="document.getElementById('importCSVFile').click()">📤 Cargar CSV de Ingresos/Gastos</button>
+      <input type="file" id="importCSVFile" accept=".csv,text/csv" style="display:none;">
+      <div class="hint" id="importCSVStatus" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="settings-section">
       <h4>Respaldo automático diario</h4>
       <div class="hint" id="backupDiarioInfo">Sin respaldo automático todavía en este dispositivo.</div>
       <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="restaurarRespaldoDiario()">↩️ Restaurar este respaldo</button>
@@ -1271,6 +1317,7 @@ if(!state.nombreActualizadoV2){
 }
 if(!state.etiquetas) state.etiquetas = [];
 if(!state.recurrentes) state.recurrentes = [];
+if(!state.pendientesRecurrentes) state.pendientesRecurrentes = [];
 if(!state.creditos) state.creditos = [];
 if(!state.creditoFnaSembrado){
   // Crédito hipotecario UVR real del Fondo Nacional del Ahorro, tomado del estado de cuenta cargado en el chat
@@ -1519,7 +1566,7 @@ function parseMilesStr(str){
 /* Vincula un input de dinero a obj[key]: teclado numérico, separador de miles al salir del campo. */
 function bindMoneyInput(el, obj, key, cb){
   el.setAttribute('inputmode','decimal');
-  el.value = obj[key] ? formatMilesStr(obj[key]) : '';
+  if(document.activeElement !== el) el.value = obj[key] ? formatMilesStr(obj[key]) : '';
   el.addEventListener('focus', ()=>{ el.value = obj[key] ? String(obj[key]).replace('.', ',') : ''; });
   el.addEventListener('blur', ()=>{
     const num = parseMilesStr(el.value);
@@ -1532,7 +1579,7 @@ function bindMoneyInput(el, obj, key, cb){
 /* Igual, pero para un valor "suelto" que se lee/escribe directo con getter/setter (no un obj[key]) */
 function bindMoneyInputCustom(el, getVal, setVal){
   el.setAttribute('inputmode','decimal');
-  el.value = getVal() ? formatMilesStr(getVal()) : '';
+  if(document.activeElement !== el) el.value = getVal() ? formatMilesStr(getVal()) : '';
   el.addEventListener('focus', ()=>{ const v = getVal(); el.value = v ? String(v).replace('.', ',') : ''; });
   el.addEventListener('blur', ()=>{ setVal(parseMilesStr(el.value)); el.value = getVal() ? formatMilesStr(getVal()) : ''; });
 }
@@ -1550,20 +1597,21 @@ function bindMoneyInputCustom(el, getVal, setVal){
    concepto del presupuesto puede mover el bolsillo distinto según el caso real. */
 function registrarMovimientoDesdeFila(r, tipoDefault){
   if(!r.fondoId){ showToast('Primero elige un fondo en esta fila'); return; }
-  const tipoMov = r.tipoEnBolsillo || tipoDefault;
-  // Si se marca como Provisión, se aparta el valor PROVISIONADO (presupuestado) — todavía
-  // no se ha gastado/recibido de verdad, por eso no tiene sentido usar Consumido/Ingresado
-  // (que normalmente está en 0 hasta que el gasto o ingreso realmente ocurre).
-  let valor;
-  if(tipoMov === 'provision'){
-    valor = r.provision || 0;
-  } else if(tipoDefault === 'ingreso'){
-    valor = r.ingresado || 0;
+  const valorReal = tipoDefault==='ingreso' ? (r.ingresado||0) : (r.consumido||0);
+  let tipoMov, valor;
+  if(valorReal){
+    // Ya hay un valor real (ingresado/consumido): se registra con la tipología elegida,
+    // usando el valor Provisionado si se marcó como Provisión, o el valor real si no.
+    tipoMov = r.tipoEnBolsillo || tipoDefault;
+    valor = tipoMov==='provision' ? (r.provision||0) : valorReal;
+  } else if(r.provision){
+    // Todavía no hay valor real, pero si hay Provisión, SIEMPRE se puede registrar como
+    // provisión (apartar lo presupuestado) — no hay razón para bloquear esto.
+    tipoMov = 'provision';
+    valor = r.provision;
+    r.tipoEnBolsillo = 'provision';
   } else {
-    valor = r.consumido || 0;
-  }
-  if(!valor){
-    showToast(tipoMov==='provision' ? 'La Provisión de esta fila está en 0 — no hay nada que apartar' : 'El valor real de esta fila está en 0');
+    showToast('Esta fila no tiene ni Provisión ni valor real todavía — no hay nada que registrar');
     return;
   }
   const monto = tipoMov==='gasto' ? -Math.abs(valor) : Math.abs(valor);
@@ -2084,22 +2132,46 @@ function showBolsilloDetail(){
 
 /* ================= FLUJO DE CAJA (ahora embebido dentro de Bancos) ================= */
 let flujoFondoActual = null;
-function openMovModal(){
-  document.getElementById('movTipo').value='gasto';
-  document.getElementById('movConcepto').value='';
-  document.getElementById('movMonto').value='';
-  document.getElementById('movFecha').value = todayISO();
+let editingMovId = null;
+function openMovModal(movId){
+  editingMovId = movId || null;
+  const mov = movId ? state.movimientos.find(m=>m.id===movId) : null;
+  document.getElementById('movModalTitle').textContent = movId ? 'Editar movimiento' : 'Nuevo movimiento';
+  document.getElementById('movDeleteBtn').style.display = movId ? '' : 'none';
+  const tipoSel = document.getElementById('movTipo');
+  tipoSel.value = mov ? mov.tipo : 'gasto';
+  document.getElementById('movConcepto').value = mov ? mov.concepto : '';
+  document.getElementById('movMonto').value = mov ? formatMilesStr(Math.abs(mov.monto)) : '';
+  document.getElementById('movFecha').value = mov ? mov.fecha : todayISO();
+  document.getElementById('movDireccion').value = (mov && mov.tipo==='provision' && mov.monto<0) ? 'salida' : 'entrada';
+  actualizarVisibilidadDireccion();
   openModal('movModalBg');
 }
+function actualizarVisibilidadDireccion(){
+  document.getElementById('movDireccionRow').style.display = document.getElementById('movTipo').value==='provision' ? '' : 'none';
+}
+document.getElementById('movTipo').addEventListener('change', actualizarVisibilidadDireccion);
 function saveMov(){
   const tipo = document.getElementById('movTipo').value;
   const concepto = document.getElementById('movConcepto').value.trim();
   let monto = parseMilesStr(document.getElementById('movMonto').value)||0;
   const fecha = document.getElementById('movFecha').value;
   if(!concepto || !monto || !fecha){ showToast('Completa todos los campos'); return; }
-  if(tipo==='gasto') monto = -Math.abs(monto); else monto = Math.abs(monto);
-  state.movimientos.push({id:uid(), fondoId:flujoFondoActual, fecha, concepto, monto, tipo});
+  if(tipo==='gasto') monto = -Math.abs(monto);
+  else if(tipo==='provision') monto = document.getElementById('movDireccion').value==='salida' ? -Math.abs(monto) : Math.abs(monto);
+  else monto = Math.abs(monto);
+  if(editingMovId){
+    const mov = state.movimientos.find(m=>m.id===editingMovId);
+    if(mov) Object.assign(mov, { concepto, monto, fecha, tipo });
+  } else {
+    state.movimientos.push({id:uid(), fondoId:flujoFondoActual, fecha, concepto, monto, tipo});
+  }
   saveData(); closeModal('movModalBg'); refreshEverythingFinanzas();
+}
+function delMovDesdeModal(){
+  if(!editingMovId) return;
+  closeModal('movModalBg');
+  delMov(editingMovId);
 }
 function openTransferModal(){
   const fondos = flattenFondos();
@@ -2129,12 +2201,16 @@ function saveTransfer(){
 }
 /* Convierte una provisión (dinero apartado) en consumo real: crea un gasto por el mismo
    valor, sin borrar la provisión original — así queda el rastro de "se apartó" y "se gastó". */
+/* Al aplicar una provisión, se CONVIERTE ese mismo movimiento (no se crea uno nuevo):
+   una provisión de salida (negativa) se vuelve un Gasto real; una de entrada (positiva)
+   se vuelve un Ingreso real. Así la provisión "se borra" (deja de contar como apartada)
+   y pasa a contar de una vez como lo real, sin quedar duplicada ni contando dos veces. */
 function aplicarProvisionAConsumido(id){
   const mov = state.movimientos.find(m=>m.id===id);
   if(!mov || mov.tipo!=='provision') return;
-  state.movimientos.push({ id:uid(), fondoId:mov.fondoId, fecha:todayISO(), concepto:'Consumo de provisión: '+mov.concepto, monto:-Math.abs(mov.monto), tipo:'gasto' });
+  mov.tipo = mov.monto < 0 ? 'gasto' : 'ingreso';
   saveData(); refreshEverythingFinanzas();
-  showToast('Provisión aplicada como consumido');
+  showToast('✅ Provisión aplicada — ya cuenta como ' + (mov.tipo==='gasto' ? 'gasto real' : 'ingreso real'));
 }
 /* Confirmación propia (no usa confirm() nativo, que iOS bloquea en la app instalada
    en pantalla de inicio, igual que pasaba con prompt()). */
@@ -2207,6 +2283,18 @@ function renderAuxiliarContable(fondo){
     .slice()
     .sort((a,b)=> a.fecha===b.fecha ? 0 : a.fecha.localeCompare(b.fecha));
   const saldoInicial = fondo.saldoInicial || 0;
+  const totalEntrada = list.filter(m=>m.monto>0).reduce((a,m)=>a+m.monto,0);
+  const totalSalida = Math.abs(list.filter(m=>m.monto<0).reduce((a,m)=>a+m.monto,0));
+  const saldoFinal = saldoInicial + totalEntrada - totalSalida;
+  const resumenEl = document.getElementById('auxResumen');
+  if(resumenEl){
+    resumenEl.innerHTML = `
+      <div class="kpi"><div class="label">Saldo inicial</div><div class="value">${fmt(saldoInicial)}</div></div>
+      <div class="kpi grey"><div class="label">Entrada</div><div class="value" style="color:var(--green);">${fmt(totalEntrada)}</div></div>
+      <div class="kpi"><div class="label">Salida</div><div class="value" style="color:var(--red);">${fmt(totalSalida)}</div></div>
+      <div class="kpi grey"><div class="label">Saldo final</div><div class="value">${fmt(saldoFinal)}</div></div>
+    `;
+  }
   if(list.length===0){
     tbody.innerHTML = `<tr><td colspan="6" class="empty">Sin movimientos — saldo inicial ${fmt(saldoInicial)}</td></tr>`;
     return;
@@ -2231,6 +2319,7 @@ function renderAuxiliarContable(fondo){
       <td class="num">${fmt(f.saldo)}</td>
       <td class="num" style="white-space:nowrap;">
         ${m.tipo==='provision' ? `<button class="row-abono-btn" data-aplicarprov="${m.id}" title="Aplicar a consumido">✅</button>` : ''}
+        <button class="row-abono-btn" data-editmov="${m.id}" title="Editar">✏️</button>
         <button class="del2" data-delmov="${m.id}">✕</button>
       </td>
     </tr>`;
@@ -2238,6 +2327,7 @@ function renderAuxiliarContable(fondo){
   tbody.innerHTML = rowsHtml;
   tbody.querySelectorAll('[data-delmov]').forEach(b=>b.addEventListener('click', ()=>delMov(b.dataset.delmov)));
   tbody.querySelectorAll('[data-aplicarprov]').forEach(b=>b.addEventListener('click', ()=>aplicarProvisionAConsumido(b.dataset.aplicarprov)));
+  tbody.querySelectorAll('[data-editmov]').forEach(b=>b.addEventListener('click', ()=>openMovModal(b.dataset.editmov)));
 }
 function renderDeudas(){
   const tbody = document.getElementById('tbl-deudas'); tbody.innerHTML='';
@@ -2339,6 +2429,7 @@ function renderSummaryOnly(){
   document.getElementById('tcPct').textContent = pct+'%';
   document.getElementById('tcHint').textContent = `Cupo ${fmt(cupo)} · Deuda ${fmt(deuda)} · Disponible ${fmt(cupo-deuda)}`;
   renderConciliacionTarjeta();
+  renderResumenQuincenas();
   renderResumenIngresosTabla();
   renderResumenGastosTabla();
   renderFondosTabla();
@@ -2346,6 +2437,28 @@ function renderSummaryOnly(){
 /* Tabla confiable (sin depender de que cargue una librería de gráficas) con el
    presupuesto de Gastos partido en Mensual / 1ª Quincena / 2ª Quincena. */
 /* Tabla completa de Ingresos del mes: cada concepto con Provisión/Ingresado/Saldo, + fila TOTALES. */
+/* Resumen por quincena (1-15 / 16-31): Ingreso, Gasto y Total (Ingreso-Gasto) de cada una,
+   usando la Frecuencia que ya se le puso a cada fila en Ingresos y Gastos. */
+function renderResumenQuincenas(){
+  const tbody = document.getElementById('tbl-resumenQuincenas');
+  if(!tbody) return;
+  const m = currentMonth();
+  const grupos = [
+    { key:'quincena1', label:'1ª Quincena (1-15)' },
+    { key:'quincena2', label:'2ª Quincena (16-31)' }
+  ];
+  tbody.innerHTML = grupos.map(g=>{
+    const ingresos = m.ingresos.filter(r=>r.frecuencia===g.key).reduce((a,r)=>a+(r.ingresado||0),0);
+    const gastos = m.gastos.filter(r=>r.frecuencia===g.key).reduce((a,r)=>a+(r.consumido||0),0);
+    const total = ingresos - gastos;
+    return `<tr>
+      <td><b>${g.label}</b></td>
+      <td class="num" style="color:var(--green);">${fmt(ingresos)}</td>
+      <td class="num" style="color:var(--red);">${fmt(gastos)}</td>
+      <td class="num" style="font-weight:800;">${fmt(total)}</td>
+    </tr>`;
+  }).join('');
+}
 function renderResumenIngresosTabla(){
   const tbody = document.getElementById('tbl-resumenIngresos');
   if(!tbody) return;
@@ -2770,6 +2883,63 @@ function renderRoutines(){
 }
 
 /* ================= PENDIENTES: lista ================= */
+let editingPendienteId = null;
+function openPendienteModal(id){
+  editingPendienteId = id;
+  const it = state.pendientes.items.find(x=>x.id===id);
+  if(!it) return;
+  document.getElementById('pendEditTexto').value = it.text;
+  document.getElementById('pendEditFecha').value = it.fecha || '';
+  document.getElementById('pendEditEtiquetas').value = (it.etiquetas||[]).join(', ');
+  const rec = it.recurrenteId ? state.pendientesRecurrentes.find(r=>r.id===it.recurrenteId) : null;
+  document.getElementById('pendEditRepetir').checked = !!rec;
+  document.getElementById('pendEditDia').value = rec ? rec.diaMes : (it.fecha ? parseInt(it.fecha.split('-')[2],10) : new Date().getDate());
+  actualizarVisibilidadDiaPendiente();
+  openModal('pendienteModalBg');
+}
+function actualizarVisibilidadDiaPendiente(){
+  document.getElementById('pendEditDiaRow').style.display = document.getElementById('pendEditRepetir').checked ? '' : 'none';
+}
+document.getElementById('pendEditRepetir').addEventListener('change', actualizarVisibilidadDiaPendiente);
+function guardarPendienteEditado(){
+  const it = state.pendientes.items.find(x=>x.id===editingPendienteId);
+  if(!it) return;
+  const texto = document.getElementById('pendEditTexto').value.trim();
+  if(!texto){ showToast('El texto no puede quedar vacío'); return; }
+  it.text = texto;
+  it.fecha = document.getElementById('pendEditFecha').value || '';
+  const tags = document.getElementById('pendEditEtiquetas').value.split(',').map(t=>t.trim()).filter(Boolean);
+  it.etiquetas = tags;
+  tags.forEach(addEtiquetaGlobal);
+
+  const repetir = document.getElementById('pendEditRepetir').checked;
+  if(repetir){
+    const dia = Math.min(31, Math.max(1, parseInt(document.getElementById('pendEditDia').value,10)||1));
+    let rec = it.recurrenteId ? state.pendientesRecurrentes.find(r=>r.id===it.recurrenteId) : null;
+    if(rec){
+      Object.assign(rec, { texto, diaMes:dia, etiquetas:tags.slice() });
+    } else {
+      rec = { id:uid(), texto, diaMes:dia, etiquetas:tags.slice(), mesInicio:mesKeyHoy(), mesFin:null };
+      state.pendientesRecurrentes.push(rec);
+      it.recurrenteId = rec.id;
+      if(!it.fecha){
+        const hoy = new Date();
+        const diasEnMes = new Date(hoy.getFullYear(), hoy.getMonth()+1, 0).getDate();
+        it.fecha = mesKeyHoy() + '-' + String(Math.min(dia, diasEnMes)).padStart(2,'0');
+      }
+    }
+  } else if(it.recurrenteId){
+    state.pendientesRecurrentes = state.pendientesRecurrentes.filter(r=>r.id!==it.recurrenteId);
+    it.recurrenteId = null;
+  }
+
+  saveData();
+  materializarPendientesRecurrentes();
+  closeModal('pendienteModalBg');
+  renderTodos();
+  if(document.getElementById('module-calendario').classList.contains('active')) renderCalendar();
+  showToast('Pendiente actualizado');
+}
 function addTodo(){
   const input = document.getElementById('todoInput');
   const text = input.value.trim();
@@ -2788,9 +2958,12 @@ function renderTodos(){
   card.innerHTML = items.map(it=>`
     <div class="task-item ${it.done?'done':''}">
       <input type="checkbox" ${it.done?'checked':''} data-id="${it.id}">
-      <div class="txt">${it.text}${it.autor?`<div class="note-autor">Por ${it.autor}</div>`:''}${(it.etiquetas&&it.etiquetas.length)?`<div class="note-tags">${it.etiquetas.map(t=>`<span class="tag-chip">🏷️ ${t}</span>`).join('')}</div>`:''}</div>
-      <button class="row-abono-btn ${it.fecha?'has-abono':''}" data-fecha="${it.id}">${it.fecha ? formatDateHuman(it.fecha) : '📅'}</button>
-      <button class="row-abono-btn" data-tag="${it.id}">🏷️</button>
+      <div class="txt">${it.text}
+        ${it.fecha?`<div class="note-autor">📅 ${formatDateHuman(it.fecha)}</div>`:''}
+        ${it.autor?`<div class="note-autor">Por ${it.autor}</div>`:''}
+        ${(it.etiquetas&&it.etiquetas.length)?`<div class="note-tags">${it.etiquetas.map(t=>`<span class="tag-chip">🏷️ ${t}</span>`).join('')}</div>`:''}
+      </div>
+      <button class="row-abono-btn" data-editpend="${it.id}">✏️ Editar</button>
       <button class="row-del" data-del="${it.id}">✕</button>
     </div>`).join('');
   card.querySelectorAll('input[type=checkbox]').forEach(cb=>{
@@ -2799,29 +2972,8 @@ function renderTodos(){
       it.done = cb.checked; saveData(); renderTodos();
     });
   });
-  card.querySelectorAll('[data-fecha]').forEach(b=>{
-    b.addEventListener('click', ()=>{
-      const it = state.pendientes.items.find(x=>x.id===b.dataset.fecha);
-      const val = prompt('Fecha para este pendiente (AAAA-MM-DD), vacío para quitarla:', it.fecha||'');
-      if(val===null) return;
-      if(val==='' ){ it.fecha=''; }
-      else if(/^\d{4}-\d{2}-\d{2}$/.test(val)){ it.fecha = val; }
-      else { showToast('Formato inválido, usa AAAA-MM-DD'); return; }
-      saveData(); renderTodos();
-      if(document.getElementById('module-calendario').classList.contains('active')) renderCalendar();
-    });
-  });
-  card.querySelectorAll('[data-tag]').forEach(b=>{
-    b.addEventListener('click', ()=>{
-      const it = state.pendientes.items.find(x=>x.id===b.dataset.tag);
-      const current = (it.etiquetas||[]).join(', ');
-      const val = prompt('Etiquetas de personas para este pendiente, separadas por coma (vacío para quitar):', current);
-      if(val===null) return;
-      const tags = val.split(',').map(t=>t.trim()).filter(Boolean);
-      it.etiquetas = tags;
-      tags.forEach(addEtiquetaGlobal);
-      saveData(); renderTodos();
-    });
+  card.querySelectorAll('[data-editpend]').forEach(b=>{
+    b.addEventListener('click', ()=>openPendienteModal(b.dataset.editpend));
   });
   card.querySelectorAll('[data-del]').forEach(b=>{
     b.addEventListener('click', ()=>{
@@ -3906,6 +4058,94 @@ function saveProfile(){
   saveData();
   showToast('Datos guardados en este dispositivo');
 }
+/* ================= CARGUE MASIVO DE INGRESOS/GASTOS DESDE CSV =================
+   Formato esperado: Mes, Tipo, Concepto, Frecuencia, Provision, Real, Fondo, TipoEnBolsillo
+   - Mes: AAAA-MM
+   - Tipo: ingreso | gasto
+   - Frecuencia: mensual | quincena1 | quincena2 (vacío = mensual)
+   - Fondo (opcional): "Banco · Bolsillo" exacto, para asignarlo automáticamente
+   - TipoEnBolsillo (opcional): ingreso | gasto | provision (vacío = igual que Tipo) */
+function splitCSVLine(line){
+  const out = []; let cur=''; let inQuotes=false;
+  for(let i=0;i<line.length;i++){
+    const c = line[i];
+    if(c==='"'){
+      if(inQuotes && line[i+1]==='"'){ cur+='"'; i++; }
+      else { inQuotes = !inQuotes; }
+    } else if(c===',' && !inQuotes){ out.push(cur); cur=''; }
+    else cur += c;
+  }
+  out.push(cur);
+  return out;
+}
+function parseCSV(text){
+  const lines = text.split(/\r?\n/).filter(l=>l.trim().length>0);
+  if(lines.length<2) return [];
+  const headers = splitCSVLine(lines[0]).map(h=>h.trim());
+  return lines.slice(1).map(line=>{
+    const cells = splitCSVLine(line);
+    const obj = {};
+    headers.forEach((h,i)=>{ obj[h] = (cells[i]!==undefined ? cells[i].trim() : ''); });
+    return obj;
+  });
+}
+document.getElementById('importCSVFile').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev)=>{
+    const statusEl = document.getElementById('importCSVStatus');
+    try{
+      const rows = parseCSV(ev.target.result);
+      const fondos = flattenFondos();
+      let creados=0, actualizados=0, sinFondo=0, mesesCreados=0, ignoradas=0;
+      rows.forEach(r=>{
+        const mes = (r.Mes||'').trim();
+        if(!/^\d{4}-\d{2}$/.test(mes)){ ignoradas++; return; }
+        const tipo = (r.Tipo||'').trim().toLowerCase();
+        const concepto = (r.Concepto||'').trim();
+        if(!concepto || (tipo!=='ingreso' && tipo!=='gasto')){ ignoradas++; return; }
+        if(!state.months[mes]){ state.months[mes] = emptyMonth(); mesesCreados++; }
+        const m = state.months[mes];
+        const frecuencia = ['mensual','quincena1','quincena2'].includes((r.Frecuencia||'').trim()) ? r.Frecuencia.trim() : 'mensual';
+        const provision = parseFloat(String(r.Provision||'0').replace(/\./g,'').replace(',','.'))||0;
+        const real = parseFloat(String(r.Real||'0').replace(/\./g,'').replace(',','.'))||0;
+        const fondoNombre = (r.Fondo||'').trim();
+        let fondoId = '';
+        if(fondoNombre){
+          const match = fondos.find(f=>(f.bancoNombre+' · '+f.nombre).toLowerCase()===fondoNombre.toLowerCase());
+          if(match) fondoId = match.id; else sinFondo++;
+        }
+        const tipoEnBolsillo = ['ingreso','gasto','provision'].includes((r.TipoEnBolsillo||'').trim()) ? r.TipoEnBolsillo.trim() : tipo;
+        const coll = tipo==='ingreso' ? m.ingresos : m.gastos;
+        let row = coll.find(x=>x.concepto.toLowerCase()===concepto.toLowerCase() && x.frecuencia===frecuencia);
+        if(row){
+          row.provision = provision;
+          if(tipo==='ingreso') row.ingresado = real; else row.consumido = real;
+          if(fondoId) row.fondoId = fondoId;
+          row.tipoEnBolsillo = tipoEnBolsillo;
+          actualizados++;
+        } else {
+          const nuevo = { id:uid(), concepto, provision, frecuencia, fondoId, movId:null, tipoEnBolsillo };
+          if(tipo==='ingreso') nuevo.ingresado = real; else nuevo.consumido = real;
+          coll.push(nuevo);
+          creados++;
+        }
+      });
+      saveData();
+      renderFinAll();
+      let msg = `✅ ${creados} filas creadas, ${actualizados} actualizadas, ${mesesCreados} meses nuevos.`;
+      if(sinFondo) msg += ` ⚠️ ${sinFondo} filas con un nombre de Fondo que no coincide con ninguno tuyo (quedaron sin fondo, revisa el nombre exacto).`;
+      if(ignoradas) msg += ` (${ignoradas} filas se ignoraron por datos incompletos.)`;
+      statusEl.textContent = msg;
+      showToast('CSV importado');
+    }catch(err){
+      statusEl.textContent = '❌ No se pudo leer el archivo: ' + err.message;
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+});
 function exportBackup(){
   const dataStr = JSON.stringify(state, null, 2);
   const blob = new Blob([dataStr], {type:'application/json'});
@@ -4160,10 +4400,41 @@ function repararMovimientosAnclados(){
   if(changed) saveData();
   return changed;
 }
+function mesKeyHoy(){ const d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+/* Igual que los movimientos recurrentes de bolsillos, pero para Pendientes — útil para
+   "tarifas" fijas (celular, luz) o tareas que se repiten todos los meses. Se materializa
+   hasta el mes calendario REAL de hoy (los pendientes no dependen del mes de Finanzas). */
+function materializarPendientesRecurrentes(){
+  if(!state.pendientesRecurrentes) state.pendientesRecurrentes = [];
+  let changed = false;
+  const limite = mesKeyHoy();
+  state.pendientesRecurrentes.forEach(rec=>{
+    let mes = rec.mesInicio;
+    let guard = 0;
+    while(mes <= limite && guard < 600){
+      guard++;
+      if(!rec.mesFin || mes <= rec.mesFin){
+        const yaExiste = state.pendientes.items.some(it=>it.recurrenteId===rec.id && (it.fecha||'').startsWith(mes));
+        if(!yaExiste){
+          const [y,mo] = mes.split('-').map(Number);
+          const diasEnMes = new Date(y, mo, 0).getDate();
+          const dia = Math.min(rec.diaMes||1, diasEnMes);
+          const fecha = mes + '-' + String(dia).padStart(2,'0');
+          state.pendientes.items.push({ id:uid(), text:rec.texto, done:false, fecha, etiquetas:(rec.etiquetas||[]).slice(), autor:state.perfil.nombre||'', recurrenteId:rec.id });
+          changed = true;
+        }
+      }
+      mes = mesSiguiente(mes);
+    }
+  });
+  if(changed) saveData();
+  return changed;
+}
 
 /* ================= Inicio ================= */
 const seRepararon = repararMovimientosAnclados();
 materializarRecurrentes();
+materializarPendientesRecurrentes();
 renderFinAll();
 switchModule('finanzas');
 checkDueNotifications();
