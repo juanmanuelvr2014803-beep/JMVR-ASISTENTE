@@ -427,7 +427,8 @@
         </section>
         <section>
           <h2 class="section-title">Gastos del mes<button class="btn btn-primary btn-sm" onclick="addRow('gastos')">+ Agregar</button></h2>
-          <div class="card"><table class="grid-table"><thead><tr><th>Concepto</th><th>Frecuencia</th><th>Provisión</th><th>Consumido</th><th>Fondo</th><th>Movimiento</th><th></th></tr></thead><tbody id="tbl-gastos"></tbody></table></div>
+          <div class="card"><table class="grid-table"><thead><tr><th>Concepto</th><th>Frecuencia</th><th>Provisión</th><th>Consumido</th><th>Fondo</th><th>Naturaleza en el bolsillo</th><th>Movimiento</th><th></th></tr></thead><tbody id="tbl-gastos"></tbody></table></div>
+          <div class="hint" style="margin-top:6px;">"Naturaleza en el bolsillo" indica si este gasto resta plata del bolsillo (lo normal) o suma (por ejemplo, un aporte a un fondo de ahorro es un gasto del presupuesto, pero mete dinero a ese bolsillo). Tócalo para cambiarlo.</div>
           <div class="hint" style="margin-top:6px;">Elige un fondo y toca "↔ Registrar" para que ese gasto también quede como movimiento de salida en el fondo, sin tener que crearlo aparte en Bancos.</div>
         </section>
       </div>
@@ -437,13 +438,14 @@
           <h2 class="section-title">Tarjeta de crédito</h2>
           <div class="card"><div class="card-body">
             <label class="hint">Cupo total</label>
-            <input type="number" id="tcCupo" style="width:100%;border:1px solid var(--grey-200);border-radius:8px;padding:8px;margin:4px 0 10px;font-size:14px;">
+            <input type="text" id="tcCupo" style="width:100%;border:1px solid var(--grey-200);border-radius:8px;padding:8px;margin:4px 0 10px;font-size:14px;">
             <label class="hint">Deuda actual</label>
-            <input type="number" id="tcDeuda" style="width:100%;border:1px solid var(--grey-200);border-radius:8px;padding:8px;margin:4px 0 10px;font-size:14px;">
+            <input type="text" id="tcDeuda" style="width:100%;border:1px solid var(--grey-200);border-radius:8px;padding:8px;margin:4px 0 10px;font-size:14px;">
             <div class="hint">Cupo disponible calculado (cupo − deuda): <b id="tcDisponibleCalc">$0</b></div>
             <label class="hint" style="margin-top:10px; display:block;">Cupo disponible que informa el banco (opcional, para conciliar)</label>
-            <input type="number" id="tcCupoBanco" placeholder="Ej: 2.350.000" style="width:100%;border:1px solid var(--grey-200);border-radius:8px;padding:8px;margin:4px 0 10px;font-size:14px;">
+            <input type="text" id="tcCupoBanco" placeholder="Ej: 2.350.000" style="width:100%;border:1px solid var(--grey-200);border-radius:8px;padding:8px;margin:4px 0 10px;font-size:14px;">
             <div class="hint" id="tcConciliacion"></div>
+            <button class="btn btn-primary btn-sm" style="margin-top:10px;" onclick="openPagoDesdeBolsillo('tarjeta')">💳 Pagar tarjeta desde un bolsillo</button>
           </div></div>
         </section>
         <section>
@@ -465,18 +467,27 @@
             <div class="kpi grey"><div class="label">Ingresos del mes (si aplica)</div><div class="value" id="flujoIngresosMes">$0</div></div>
             <div class="kpi"><div class="label">Gastos del mes (si aplica)</div><div class="value" id="flujoGastosMes">$0</div></div>
           </div>
+          <div class="summary-grid" style="margin-top:8px;">
+            <div class="kpi grey"><div class="label">Provisión del mes</div><div class="value" id="flujoProvisionMes">$0</div></div>
+            <div class="kpi"><div class="label">Consumo del mes</div><div class="value" id="flujoConsumoMes">$0</div></div>
+            <div class="kpi grey"><div class="label">Provisión disponible</div><div class="value" id="flujoProvisionDisponible">$0</div></div>
+          </div>
+          <div class="summary-grid" style="margin-top:8px;">
+            <div class="kpi"><div class="label">Saldo inicial (de este mes)</div><div class="value" id="flujoSaldoInicial">$0</div></div>
+            <div class="kpi grey"><div class="label">Saldo después de provisiones</div><div class="value" id="flujoSaldoDespuesProvision">$0</div></div>
+            <div class="kpi"><div class="label">Saldo final del mes</div><div class="value" id="flujoSaldoFinalMes">$0</div></div>
+          </div>
+          <div class="hint" style="margin-top:2px;">El saldo final de este mes se convierte solo en el saldo inicial del mes siguiente — no hay que hacer nada aparte.</div>
           <div class="hint" id="flujoIncluyeHint" style="margin-top:6px;"></div>
           <div style="margin-top:14px; display:flex; justify-content:space-between; align-items:center;">
-            <h3 style="margin:0; font-size:13px;">Movimientos</h3>
+            <h3 style="margin:0; font-size:13px;">Movimientos y saldo (auxiliar contable)</h3>
             <span style="display:flex; gap:6px;">
               <button class="btn btn-ghost btn-sm" onclick="openTransferModal()">⇄ Transferir</button>
               <button class="btn btn-primary btn-sm" onclick="openMovModal()">+ Movimiento</button>
             </span>
           </div>
-          <div class="card" id="movList" style="margin-top:8px;"></div>
-          <h3 style="font-size:13px; margin-top:14px;">Auxiliar contable</h3>
-          <div class="hint" style="margin-bottom:8px;">Detalle cronológico de entradas y salidas de este fondo, con el saldo acumulado después de cada movimiento — igual a un auxiliar contable tradicional.</div>
-          <div class="card"><table class="grid-table"><thead><tr><th>Fecha</th><th>Concepto</th><th>Entrada</th><th>Salida</th><th>Saldo</th></tr></thead><tbody id="tbl-auxiliar"></tbody></table></div>
+          <div class="hint" style="margin:6px 0 8px;">Cada movimiento con el saldo que queda justo después de él — entrada, salida y saldo corrido, todo junto, del más reciente al más antiguo.</div>
+          <div class="card"><table class="grid-table"><thead><tr><th>Fecha</th><th>Concepto</th><th>Entrada</th><th>Salida</th><th>Saldo</th><th></th></tr></thead><tbody id="tbl-auxiliar"></tbody></table></div>
         </section>
       </div>
 
@@ -536,7 +547,7 @@
         <section>
           <h2 class="section-title">Deudas sin cronograma<button class="btn btn-primary btn-sm" onclick="addRow('deudas')">+ Agregar</button></h2>
           <div class="hint" style="margin-bottom:8px;">Para tarjetas, préstamos informales u otras deudas que no necesitan tabla de amortización — solo un resumen rápido.</div>
-          <div class="card"><table class="grid-table"><thead><tr><th>Entidad</th><th>Tasa %</th><th>Cuota</th><th>Saldo capital</th><th></th></tr></thead><tbody id="tbl-deudas"></tbody></table></div>
+          <div class="card"><table class="grid-table"><thead><tr><th>Entidad</th><th>Tasa %</th><th>Cuota</th><th>Saldo capital</th><th>Pagar</th><th></th></tr></thead><tbody id="tbl-deudas"></tbody></table></div>
         </section>
       </div>
 
@@ -745,7 +756,7 @@
     <label>Nombre del bolsillo</label>
     <input type="text" id="bolsilloNombre" placeholder="Ej: Nequi, Ahorro vacaciones, Efectivo">
     <label>Saldo inicial</label>
-    <input type="number" id="bolsilloSaldo" placeholder="Ej: 500000">
+    <input type="text" inputmode="decimal" id="bolsilloSaldo" placeholder="Ej: 500000">
     <label style="display:flex; align-items:center; gap:8px; margin-top:12px;">
       <input type="checkbox" id="bolsilloIncluir" style="width:16px;height:16px;" checked>
       Incluir sus movimientos en el cálculo de ingresos y gastos del mes
@@ -767,11 +778,12 @@
     <select id="movTipo">
       <option value="ingreso">Ingreso (+)</option>
       <option value="gasto">Gasto (−)</option>
+      <option value="provision">Provisión — aparta dinero, no cuenta como gasto (+)</option>
     </select>
     <label>Concepto</label>
     <input type="text" id="movConcepto" placeholder="Ej: Nómina, mercado, gasolina">
     <label>Valor</label>
-    <input type="number" id="movMonto" placeholder="Ej: 150000">
+    <input type="text" inputmode="decimal" id="movMonto" placeholder="Ej: 150000">
     <label>Fecha</label>
     <input type="date" id="movFecha">
     <div class="actions">
@@ -790,7 +802,7 @@
     <label>Hacia</label>
     <select id="transferDestino"></select>
     <label>Valor a transferir</label>
-    <input type="number" id="transferMonto" placeholder="Ej: 200000">
+    <input type="text" inputmode="decimal" id="transferMonto" placeholder="Ej: 200000">
     <label>Concepto (opcional)</label>
     <input type="text" id="transferConcepto" placeholder="Ej: Pase a fondo de ahorro">
     <label>Fecha</label>
@@ -809,7 +821,7 @@
     <label>Concepto</label>
     <input type="text" id="pagoConcepto" placeholder="Ej: Arriendo, Netflix, Cuota Falabella">
     <label>Valor aproximado</label>
-    <input type="number" id="pagoMonto" placeholder="Ej: 450000">
+    <input type="text" inputmode="decimal" id="pagoMonto" placeholder="Ej: 450000">
     <label>Día del mes en que se paga</label>
     <input type="number" id="pagoDia" min="1" max="31" placeholder="Ej: 5">
     <label>Link donde se paga (opcional)</label>
@@ -824,11 +836,40 @@
   </div>
 </div>
 
+<div class="modal-bg" id="pagoDesdeBolsilloModalBg">
+  <div class="modal">
+    <h3 id="pagoDesdeBolsilloTitle">Pagar desde un bolsillo</h3>
+    <label>Bolsillo de donde sale el dinero</label>
+    <select id="pagoDesdeBolsilloFondo"></select>
+    <label>Valor a pagar</label>
+    <input type="text" inputmode="decimal" id="pagoDesdeBolsilloMonto" placeholder="Ej: 200000">
+    <div class="hint" id="pagoDesdeBolsilloHint" style="margin-top:6px;"></div>
+    <div class="actions">
+      <button class="btn btn-ghost" onclick="closeModal('pagoDesdeBolsilloModalBg')">Cancelar</button>
+      <button class="btn btn-primary" id="pagoDesdeBolsilloBtn">Pagar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="nuevoMesModalBg">
+  <div class="modal">
+    <h3>Nuevo mes</h3>
+    <label>Elige el mes</label>
+    <input type="month" id="nuevoMesInput">
+    <div class="hint" style="margin-top:6px;">Se crea con los mismos conceptos de Ingresos y Gastos del mes actual (en ceros, listos para llenar). Los bolsillos y sus movimientos no se copian — siguen su propio historial normal.</div>
+    <div class="err" id="nuevoMesErr"></div>
+    <div class="actions">
+      <button class="btn btn-ghost" onclick="cancelarNuevoMes()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarNuevoMes()">Crear mes</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="abonoModalBg">
   <div class="modal">
     <h3 id="abonoModalTitle">Abono extra a capital</h3>
     <label id="abonoModalLabel">Valor en pesos</label>
-    <input type="number" id="abonoModalInput" placeholder="0">
+    <input type="text" inputmode="decimal" id="abonoModalInput" placeholder="0">
     <div class="hint" id="abonoModalHint" style="margin-top:6px;"></div>
     <div class="actions">
       <button class="btn btn-ghost" onclick="closeModal('abonoModalBg')">Cancelar</button>
@@ -1042,8 +1083,8 @@ function saveData(){
 let state = loadData();
 if(!state.months) state.months = {};
 Object.values(state.months).forEach(m=>{
-  (m.ingresos||[]).forEach(r=>{ if(!r.frecuencia) r.frecuencia='mensual'; });
-  (m.gastos||[]).forEach(r=>{ if(!r.frecuencia) r.frecuencia='mensual'; });
+  (m.ingresos||[]).forEach(r=>{ if(!r.frecuencia) r.frecuencia='mensual'; if(r.frecuencia==='quincenal') r.frecuencia='quincena1'; });
+  (m.gastos||[]).forEach(r=>{ if(!r.frecuencia) r.frecuencia='mensual'; if(r.frecuencia==='quincenal') r.frecuencia='quincena1'; });
 });
 if(!state.calendar) state.calendar = { tasks:[] };
 // migración: cada evento del calendario ahora tiene "type" (tarea|pendiente) y "notify"
@@ -1133,6 +1174,8 @@ function switchModule(mod){
   if(mod==='diario') renderDiario();
   if(mod==='finanzas'){
     if(state.perfil.finPinEnabled && !financeUnlocked) showFinLock(); else hideFinLock();
+    const activeSub = document.querySelector('#tabsFin .subtab.active');
+    if(activeSub && activeSub.dataset.view==='resumen') renderCharts();
   } else {
     financeUnlocked = false; // se vuelve a pedir PIN cada vez que se entra de nuevo a Finanzas
   }
@@ -1191,6 +1234,7 @@ document.querySelectorAll('#tabsFin .subtab').forEach(btn=>{
     if(btn.dataset.view==='creditos') renderCreditos();
     if(btn.dataset.view==='pagos') renderPagos();
     if(btn.dataset.view==='ahorros') renderBancos();
+    if(btn.dataset.view==='resumen') renderCharts();
   });
 });
 /* ================= Subtabs Calendario ================= */
@@ -1218,16 +1262,51 @@ function refreshMonthSelect(){
 document.getElementById('monthSelect').addEventListener('change', e=>{
   const v = e.target.value;
   if(v === '__new__'){
-    const label = prompt('Nuevo mes (formato AAAA-MM), ej: 2026-08');
-    if(label && /^\d{4}-\d{2}$/.test(label)){
-      if(!state.months[label]) state.months[label] = emptyMonth();
-      state.current = label; saveData(); renderFinAll();
-    } else refreshMonthSelect();
+    openNuevoMesModal();
     return;
   }
   state.current = v; saveData(); renderFinAll();
   document.getElementById('headerTitle').textContent = 'JMVR ' + monthLabel(state.current);
 });
+function openNuevoMesModal(){
+  const now = new Date();
+  document.getElementById('nuevoMesInput').value = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  document.getElementById('nuevoMesErr').textContent = '';
+  openModal('nuevoMesModalBg');
+}
+function cancelarNuevoMes(){
+  closeModal('nuevoMesModalBg');
+  refreshMonthSelect();
+}
+function confirmarNuevoMes(){
+  const label = document.getElementById('nuevoMesInput').value;
+  const errEl = document.getElementById('nuevoMesErr');
+  if(!label || !/^\d{4}-\d{2}$/.test(label)){ errEl.textContent = 'Elige un mes válido'; return; }
+  closeModal('nuevoMesModalBg');
+  crearMesNuevo(label);
+}
+/* Crea un mes nuevo copiando los mismos conceptos de Ingresos y Gastos del mes en curso
+   (para no volver a escribirlos cada vez), pero con los valores reales en cero y sin
+   vínculo a movimientos — los bolsillos y sus movimientos NO se copian: siguen su propio
+   historial global, así que continúan (se "arrastran") solos sin ninguna acción extra. */
+function crearMesNuevo(label){
+  if(state.months[label]){
+    state.current = label; saveData(); renderFinAll();
+    showToast('Ese mes ya existía, lo abrí');
+    return;
+  }
+  const base = currentMonth();
+  const nuevo = emptyMonth();
+  nuevo.ingresos = base.ingresos.map(r=>({ id:uid(), concepto:r.concepto, provision:r.provision||0, ingresado:0, frecuencia:r.frecuencia||'mensual', fondoId:'', movId:null }));
+  nuevo.gastos = base.gastos.map(r=>({ id:uid(), concepto:r.concepto, provision:r.provision||0, consumido:0, frecuencia:r.frecuencia||'mensual', fondoId:'', movId:null }));
+  nuevo.deudas = (base.deudas||[]).map(r=>({ id:uid(), entidad:r.entidad, tasa:r.tasa, cuota:r.cuota, saldo:r.saldo }));
+  nuevo.tarjeta = { cupo: base.tarjeta.cupo||0, deuda: base.tarjeta.deuda||0, cupoBanco: base.tarjeta.cupoBanco!==undefined?base.tarjeta.cupoBanco:null };
+  nuevo.tarjetaMov = [];
+  state.months[label] = nuevo;
+  state.current = label;
+  saveData(); renderFinAll();
+  showToast('Mes creado con los mismos ingresos y gastos — los bolsillos siguen su historial normal');
+}
 
 /* ================= FINANZAS: tablas editables ================= */
 function addRow(section){
@@ -1261,23 +1340,76 @@ function liveRefreshFinanzas(){
 function bindNumber(el, obj, key){ el.addEventListener('input', ()=>{ obj[key] = parseFloat(el.value) || 0; saveData(); liveRefreshFinanzas(); }); }
 function bindText(el, obj, key){ el.addEventListener('input', ()=>{ obj[key] = el.value; saveData(); liveRefreshFinanzas(); }); }
 
+/* ================= Formato de números con separador de miles (estilo colombiano: 1.234.567) =================
+   Los campos de valores en pesos usan input type="text" + inputmode="decimal" (así el celular
+   muestra el teclado numérico igual que con type="number", pero sí podemos mostrar puntos de
+   miles). Mientras se está escribiendo se ve el número "pelado" para no pelear con el cursor;
+   al salir del campo (blur) se formatea con separadores. */
+function formatMilesStr(n){
+  if(n===null || n===undefined || n==='') return '';
+  const num = typeof n === 'number' ? n : parseFloat(n);
+  if(isNaN(num)) return '';
+  const neg = num < 0;
+  const parts = Math.abs(num).toString().split('.');
+  let intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  let out = (neg?'-':'') + intPart;
+  if(parts[1]) out += ',' + parts[1].slice(0,2);
+  return out;
+}
+function parseMilesStr(str){
+  if(str===null || str===undefined || str==='') return 0;
+  const cleaned = String(str).trim().replace(/\./g,'').replace(',', '.');
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? 0 : num;
+}
+/* Vincula un input de dinero a obj[key]: teclado numérico, separador de miles al salir del campo. */
+function bindMoneyInput(el, obj, key, cb){
+  el.setAttribute('inputmode','decimal');
+  el.value = obj[key] ? formatMilesStr(obj[key]) : '';
+  el.addEventListener('focus', ()=>{ el.value = obj[key] ? String(obj[key]).replace('.', ',') : ''; });
+  el.addEventListener('blur', ()=>{
+    const num = parseMilesStr(el.value);
+    obj[key] = num;
+    el.value = num ? formatMilesStr(num) : '';
+    saveData();
+    if(cb) cb(); else liveRefreshFinanzas();
+  });
+}
+/* Igual, pero para un valor "suelto" que se lee/escribe directo con getter/setter (no un obj[key]) */
+function bindMoneyInputCustom(el, getVal, setVal){
+  el.setAttribute('inputmode','decimal');
+  el.value = getVal() ? formatMilesStr(getVal()) : '';
+  el.addEventListener('focus', ()=>{ const v = getVal(); el.value = v ? String(v).replace('.', ',') : ''; });
+  el.addEventListener('blur', ()=>{ setVal(parseMilesStr(el.value)); el.value = getVal() ? formatMilesStr(getVal()) : ''; });
+}
+
 /* Registra (o actualiza) automáticamente el movimiento en el fondo elegido cuando
-   se marca un ingreso/gasto como recibido/pagado — así no hay que crearlo dos veces. */
+   se marca un ingreso/gasto como recibido/pagado — así no hay que crearlo dos veces.
+   Un "gasto" del presupuesto puede en realidad SUMAR en el bolsillo (ej: un aporte a
+   ahorros se ve como gasto del mes, pero mete plata al bolsillo de ahorro) — por eso
+   se respeta r.naturaleza ('resta' de forma normal, o 'suma' si así lo marcaste). */
 function registrarMovimientoDesdeFila(r, tipo){
   if(!r.fondoId){ showToast('Primero elige un fondo en esta fila'); return; }
   const valor = tipo==='ingreso' ? (r.ingresado||0) : (r.consumido||0);
   if(!valor){ showToast('El valor de '+(tipo==='ingreso'?'"Ingresado"':'"Consumido"')+' está en 0'); return; }
-  const monto = tipo==='ingreso' ? Math.abs(valor) : -Math.abs(valor);
+  let monto, tipoMov;
+  if(tipo==='ingreso'){
+    monto = Math.abs(valor); tipoMov = 'ingreso';
+  } else {
+    const suma = r.naturaleza==='suma';
+    monto = suma ? Math.abs(valor) : -Math.abs(valor);
+    tipoMov = suma ? 'ingreso' : 'gasto';
+  }
   let mov = r.movId ? state.movimientos.find(m=>m.id===r.movId) : null;
   if(mov){
-    mov.fondoId = r.fondoId; mov.monto = monto; mov.concepto = r.concepto;
+    mov.fondoId = r.fondoId; mov.monto = monto; mov.concepto = r.concepto; mov.tipo = tipoMov;
   } else {
-    mov = { id:uid(), fondoId:r.fondoId, fecha:todayISO(), concepto:r.concepto, monto, tipo };
+    mov = { id:uid(), fondoId:r.fondoId, fecha:todayISO(), concepto:r.concepto, monto, tipo: tipoMov };
     state.movimientos.push(mov);
     r.movId = mov.id;
   }
   saveData(); refreshEverythingFinanzas();
-  showToast('Movimiento registrado en el fondo');
+  showToast(tipoMov==='ingreso' ? '✅ Registrado como ENTRADA (suma) en el bolsillo' : '✅ Registrado como SALIDA (resta) del bolsillo');
 }
 function desregistrarMovimientoDesdeFila(r){
   if(!r.movId) return;
@@ -1286,22 +1418,27 @@ function desregistrarMovimientoDesdeFila(r){
   saveData(); refreshEverythingFinanzas();
   showToast('Movimiento retirado del fondo');
 }
-function freqLabel(f){ return f==='quincenal' ? 'Quincenal' : 'Mensual'; }
+function freqLabel(f){
+  if(f==='quincena1') return '1ª Quincena (1-15)';
+  if(f==='quincena2') return '2ª Quincena (16-31)';
+  return 'Mensual';
+}
 function bindSelect(el, obj, key, cb){ el.addEventListener('change', ()=>{ obj[key] = el.value; saveData(); if(cb) cb(); }); }
 function renderIngresos(){
   const tbody = document.getElementById('tbl-ingresos'); tbody.innerHTML='';
   const fondos = flattenFondos();
   currentMonth().ingresos.forEach(r=>{
-    if(!r.frecuencia) r.frecuencia='mensual';
+    if(!r.frecuencia || r.frecuencia==='quincenal') r.frecuencia = r.frecuencia==='quincenal' ? 'quincena1' : 'mensual';
     if(r.fondoId===undefined) r.fondoId='';
     if(r.movId===undefined) r.movId=null;
     const tr = document.createElement('tr');
     tr.innerHTML = `<td><input class="txt" value="${r.concepto}"></td>
       <td><select class="txt">
         <option value="mensual" ${r.frecuencia==='mensual'?'selected':''}>Mensual</option>
-        <option value="quincenal" ${r.frecuencia==='quincenal'?'selected':''}>Quincenal</option>
+        <option value="quincena1" ${r.frecuencia==='quincena1'?'selected':''}>1ª Quincena (1-15)</option>
+        <option value="quincena2" ${r.frecuencia==='quincena2'?'selected':''}>2ª Quincena (16-31)</option>
       </select></td>
-      <td><input type="number" value="${r.provision}"></td><td><input type="number" value="${r.ingresado}"></td>
+      <td><input type="text" class="money" value="${r.provision}"></td><td><input type="text" class="money" value="${r.ingresado}"></td>
       <td><select class="txt fondo-sel">
         <option value="">Sin fondo</option>
         ${fondos.map(f=>`<option value="${f.id}" ${r.fondoId===f.id?'selected':''}>${f.bancoNombre} · ${f.nombre}</option>`).join('')}
@@ -1310,8 +1447,8 @@ function renderIngresos(){
       <td><button class="row-del">✕</button></td>`;
     const [c] = tr.querySelectorAll('input.txt');
     const [sel, fondoSel] = tr.querySelectorAll('select');
-    const [p,i] = tr.querySelectorAll('input[type="number"]');
-    bindText(c,r,'concepto'); bindSelect(sel,r,'frecuencia',renderIngresosInforme); bindNumber(p,r,'provision'); bindNumber(i,r,'ingresado');
+    const [p,i] = tr.querySelectorAll('input.money');
+    bindText(c,r,'concepto'); bindSelect(sel,r,'frecuencia',renderIngresosInforme); bindMoneyInput(p,r,'provision'); bindMoneyInput(i,r,'ingresado');
     fondoSel.addEventListener('change', ()=>{ r.fondoId = fondoSel.value; saveData(); });
     tr.querySelector('.reg-mov-btn').addEventListener('click', ()=>{
       if(r.movId) desregistrarMovimientoDesdeFila(r); else registrarMovimientoDesdeFila(r, 'ingreso');
@@ -1326,12 +1463,12 @@ function renderIngresosInforme(){
   const wrap = document.getElementById('informeIngresos');
   if(!wrap) return;
   const rows = currentMonth().ingresos;
-  const grupos = { mensual: rows.filter(r=>r.frecuencia!=='quincenal'), quincenal: rows.filter(r=>r.frecuencia==='quincenal') };
-  wrap.innerHTML = ['mensual','quincenal'].map(tipo=>{
+  const grupos = { mensual: rows.filter(r=>r.frecuencia==='mensual'||!r.frecuencia), quincena1: rows.filter(r=>r.frecuencia==='quincena1'), quincena2: rows.filter(r=>r.frecuencia==='quincena2') };
+  wrap.innerHTML = ['mensual','quincena1','quincena2'].map(tipo=>{
     const g = grupos[tipo];
     const prov = g.reduce((a,r)=>a+(r.provision||0),0);
     const ing = g.reduce((a,r)=>a+(r.ingresado||0),0);
-    return `<div class="kpi ${tipo==='quincenal'?'grey':''}">
+    return `<div class="kpi ${tipo!=='mensual'?'grey':''}">
       <div class="label">${freqLabel(tipo)} (${g.length})</div>
       <div class="value">${fmt(ing)}</div>
       <div class="hint" style="margin-top:2px;">Provisión ${fmt(prov)}</div>
@@ -1342,27 +1479,37 @@ function renderGastos(){
   const tbody = document.getElementById('tbl-gastos'); tbody.innerHTML='';
   const fondos = flattenFondos();
   currentMonth().gastos.forEach(r=>{
-    if(!r.frecuencia) r.frecuencia='mensual';
+    if(!r.frecuencia || r.frecuencia==='quincenal') r.frecuencia = r.frecuencia==='quincenal' ? 'quincena1' : 'mensual';
     if(r.fondoId===undefined) r.fondoId='';
     if(r.movId===undefined) r.movId=null;
+    if(r.naturaleza===undefined) r.naturaleza='resta';
+    const esSuma = r.naturaleza==='suma';
     const tr = document.createElement('tr');
     tr.innerHTML = `<td><input class="txt" value="${r.concepto}"></td>
       <td><select class="txt">
         <option value="mensual" ${r.frecuencia==='mensual'?'selected':''}>Mensual</option>
-        <option value="quincenal" ${r.frecuencia==='quincenal'?'selected':''}>Quincenal</option>
+        <option value="quincena1" ${r.frecuencia==='quincena1'?'selected':''}>1ª Quincena (1-15)</option>
+        <option value="quincena2" ${r.frecuencia==='quincena2'?'selected':''}>2ª Quincena (16-31)</option>
       </select></td>
-      <td><input type="number" value="${r.provision}"></td><td><input type="number" value="${r.consumido}"></td>
+      <td><input type="text" class="money" value="${r.provision}"></td><td><input type="text" class="money" value="${r.consumido}"></td>
       <td><select class="txt fondo-sel">
         <option value="">Sin fondo</option>
         ${fondos.map(f=>`<option value="${f.id}" ${r.fondoId===f.id?'selected':''}>${f.bancoNombre} · ${f.nombre}</option>`).join('')}
       </select></td>
+      <td class="num"><button class="row-abono-btn nat-btn ${esSuma?'has-abono':''}" title="Cómo afecta este gasto al bolsillo que elegiste">${esSuma?'➕ Suma en el bolsillo':'➖ Resta del bolsillo'}</button></td>
       <td class="num"><button class="row-abono-btn reg-mov-btn ${r.movId?'has-abono':''}">${r.movId?'✓ Registrado':'↔ Registrar'}</button></td>
       <td><button class="row-del">✕</button></td>`;
     const [c] = tr.querySelectorAll('input.txt');
     const [sel, fondoSel] = tr.querySelectorAll('select');
-    const [p,co] = tr.querySelectorAll('input[type="number"]');
-    bindText(c,r,'concepto'); bindSelect(sel,r,'frecuencia',renderGastosInforme); bindNumber(p,r,'provision'); bindNumber(co,r,'consumido');
+    const [p,co] = tr.querySelectorAll('input.money');
+    bindText(c,r,'concepto'); bindSelect(sel,r,'frecuencia',renderGastosInforme); bindMoneyInput(p,r,'provision'); bindMoneyInput(co,r,'consumido');
     fondoSel.addEventListener('change', ()=>{ r.fondoId = fondoSel.value; saveData(); });
+    tr.querySelector('.nat-btn').addEventListener('click', ()=>{
+      r.naturaleza = r.naturaleza==='suma' ? 'resta' : 'suma';
+      saveData();
+      if(r.movId) registrarMovimientoDesdeFila(r, 'gasto'); // re-sincroniza el movimiento ya creado con el nuevo signo
+      renderGastos();
+    });
     tr.querySelector('.reg-mov-btn').addEventListener('click', ()=>{
       if(r.movId) desregistrarMovimientoDesdeFila(r); else registrarMovimientoDesdeFila(r, 'gasto');
       renderGastos();
@@ -1376,12 +1523,12 @@ function renderGastosInforme(){
   const wrap = document.getElementById('informeGastos');
   if(!wrap) return;
   const rows = currentMonth().gastos;
-  const grupos = { mensual: rows.filter(r=>r.frecuencia!=='quincenal'), quincenal: rows.filter(r=>r.frecuencia==='quincenal') };
-  wrap.innerHTML = ['mensual','quincenal'].map(tipo=>{
+  const grupos = { mensual: rows.filter(r=>r.frecuencia==='mensual'||!r.frecuencia), quincena1: rows.filter(r=>r.frecuencia==='quincena1'), quincena2: rows.filter(r=>r.frecuencia==='quincena2') };
+  wrap.innerHTML = ['mensual','quincena1','quincena2'].map(tipo=>{
     const g = grupos[tipo];
     const prov = g.reduce((a,r)=>a+(r.provision||0),0);
     const cons = g.reduce((a,r)=>a+(r.consumido||0),0);
-    return `<div class="kpi ${tipo==='quincenal'?'grey':''}">
+    return `<div class="kpi ${tipo!=='mensual'?'grey':''}">
       <div class="label">${freqLabel(tipo)} (${g.length})</div>
       <div class="value">${fmt(cons)}</div>
       <div class="hint" style="margin-top:2px;">Provisión ${fmt(prov)}</div>
@@ -1391,22 +1538,17 @@ function renderGastosInforme(){
 function renderTarjeta(){
   const m = currentMonth();
   if(m.tarjeta.cupoBanco===undefined) m.tarjeta.cupoBanco = null;
-  document.getElementById('tcCupo').value = m.tarjeta.cupo;
-  document.getElementById('tcDeuda').value = m.tarjeta.deuda;
-  document.getElementById('tcCupoBanco').value = (m.tarjeta.cupoBanco!==null && m.tarjeta.cupoBanco!==undefined) ? m.tarjeta.cupoBanco : '';
-  document.getElementById('tcCupo').oninput = e=>{ m.tarjeta.cupo = parseFloat(e.target.value)||0; saveData(); renderSummaryOnly(); };
-  document.getElementById('tcDeuda').oninput = e=>{ m.tarjeta.deuda = parseFloat(e.target.value)||0; saveData(); renderSummaryOnly(); };
-  document.getElementById('tcCupoBanco').oninput = e=>{
-    const v = e.target.value.trim();
-    m.tarjeta.cupoBanco = v==='' ? null : (parseFloat(v)||0);
-    saveData(); renderSummaryOnly();
-  };
+  bindMoneyInput(document.getElementById('tcCupo'), m.tarjeta, 'cupo', renderSummaryOnly);
+  bindMoneyInput(document.getElementById('tcDeuda'), m.tarjeta, 'deuda', renderSummaryOnly);
+  bindMoneyInputCustom(document.getElementById('tcCupoBanco'),
+    ()=> m.tarjeta.cupoBanco,
+    (v)=>{ m.tarjeta.cupoBanco = v || null; saveData(); renderSummaryOnly(); });
   const tbody = document.getElementById('tbl-tarjetaMov'); tbody.innerHTML='';
   m.tarjetaMov.forEach(r=>{
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td><input class="txt" value="${r.concepto}"></td><td><input type="number" value="${r.valor}"></td><td><button class="row-del">✕</button></td>`;
+    tr.innerHTML = `<td><input class="txt" value="${r.concepto}"></td><td><input type="text" class="money" value="${r.valor}"></td><td><button class="row-del">✕</button></td>`;
     const [c,v] = tr.querySelectorAll('input');
-    bindText(c,r,'concepto'); bindNumber(v,r,'valor');
+    bindText(c,r,'concepto'); bindMoneyInput(v,r,'valor');
     tr.querySelector('.row-del').onclick=()=>delRow('tarjetaMov', r.id);
     tbody.appendChild(tr);
   });
@@ -1447,6 +1589,23 @@ function saldoFondo(fondoId){
   const movs = state.movimientos.filter(m=>m.fondoId===fondoId);
   return (f.saldoInicial||0) + movs.reduce((a,m)=>a+m.monto,0);
 }
+/* Saldo del bolsillo justo ANTES de que empiece el mes dado (AAAA-MM) — es decir, el saldo
+   con el que ese mes "arranca". Como se calcula por fecha real de los movimientos, funciona
+   igual de bien para meses ya pasados que para meses futuros que estés proyectando. */
+function saldoInicialBolsilloMes(fondoId, mesKey){
+  const f = flattenFondos().find(x=>x.id===fondoId);
+  if(!f) return 0;
+  const movsAntes = state.movimientos.filter(m=>m.fondoId===fondoId && m.fecha < mesKey+'-01');
+  return (f.saldoInicial||0) + movsAntes.reduce((a,m)=>a+m.monto,0);
+}
+/* Saldo del bolsillo al CIERRE del mes dado: saldo inicial de ese mes + todos sus movimientos
+   (provisión, consumo, ingresos, gastos, transferencias) fechados dentro de ese mes. Este es
+   el que se "arrastra" como saldo inicial del mes siguiente, automáticamente. */
+function saldoFinalBolsilloMes(fondoId, mesKey){
+  const inicio = saldoInicialBolsilloMes(fondoId, mesKey);
+  const movsMes = state.movimientos.filter(m=>m.fondoId===fondoId && m.fecha.startsWith(mesKey));
+  return inicio + movsMes.reduce((a,m)=>a+m.monto,0);
+}
 /* Refresca de inmediato TODA la app financiera (resumen, gráficas, historial, bancos y flujo)
    cada vez que se agrega/edita/borra un fondo, bolsillo o movimiento */
 function refreshEverythingFinanzas(){
@@ -1472,14 +1631,14 @@ function openBolsilloModal(bancoId, fondoId){
   const f = fondoId ? banco.bolsillos.find(x=>x.id===fondoId) : null;
   document.getElementById('bolsilloModalTitle').textContent = fondoId ? 'Editar bolsillo' : 'Nuevo bolsillo';
   document.getElementById('bolsilloNombre').value = f ? f.nombre : '';
-  document.getElementById('bolsilloSaldo').value = f ? f.saldoInicial : '';
+  document.getElementById('bolsilloSaldo').value = f && f.saldoInicial ? formatMilesStr(f.saldoInicial) : '';
   document.getElementById('bolsilloIncluir').checked = f ? !!f.incluirCalculo : true;
   document.getElementById('bolsilloDeleteBtn').style.display = fondoId ? '' : 'none';
   openModal('bolsilloModalBg');
 }
 function saveBolsillo(){
   const nombre = document.getElementById('bolsilloNombre').value.trim();
-  const saldoInicial = parseFloat(document.getElementById('bolsilloSaldo').value)||0;
+  const saldoInicial = parseMilesStr(document.getElementById('bolsilloSaldo').value)||0;
   const incluirCalculo = document.getElementById('bolsilloIncluir').checked;
   if(!nombre){ showToast('Ingresa un nombre'); return; }
   const banco = state.bancos.find(b=>b.id===editingBolsillo.bancoId);
@@ -1567,7 +1726,7 @@ function openMovModal(){
 function saveMov(){
   const tipo = document.getElementById('movTipo').value;
   const concepto = document.getElementById('movConcepto').value.trim();
-  let monto = parseFloat(document.getElementById('movMonto').value)||0;
+  let monto = parseMilesStr(document.getElementById('movMonto').value)||0;
   const fecha = document.getElementById('movFecha').value;
   if(!concepto || !monto || !fecha){ showToast('Completa todos los campos'); return; }
   if(tipo==='gasto') monto = -Math.abs(monto); else monto = Math.abs(monto);
@@ -1588,7 +1747,7 @@ function openTransferModal(){
 function saveTransfer(){
   const origenId = document.getElementById('transferOrigen').value;
   const destinoId = document.getElementById('transferDestino').value;
-  const monto = Math.abs(parseFloat(document.getElementById('transferMonto').value)||0);
+  const monto = Math.abs(parseMilesStr(document.getElementById('transferMonto').value)||0);
   const conceptoBase = document.getElementById('transferConcepto').value.trim();
   const fecha = document.getElementById('transferFecha').value;
   if(!origenId || !destinoId || origenId===destinoId){ showToast('Elige dos fondos distintos'); return; }
@@ -1599,6 +1758,15 @@ function saveTransfer(){
   state.movimientos.push({id:uid(), fondoId:origenId, fecha, concepto:(conceptoBase||'Transferencia')+' → '+destino.nombre, monto:-monto, tipo:'transferencia', vinculoId});
   state.movimientos.push({id:uid(), fondoId:destinoId, fecha, concepto:(conceptoBase||'Transferencia')+' ← '+origen.nombre, monto:monto, tipo:'transferencia', vinculoId});
   saveData(); closeModal('transferModalBg'); flujoFondoActual = origenId; refreshEverythingFinanzas();
+}
+/* Convierte una provisión (dinero apartado) en consumo real: crea un gasto por el mismo
+   valor, sin borrar la provisión original — así queda el rastro de "se apartó" y "se gastó". */
+function aplicarProvisionAConsumido(id){
+  const mov = state.movimientos.find(m=>m.id===id);
+  if(!mov || mov.tipo!=='provision') return;
+  state.movimientos.push({ id:uid(), fondoId:mov.fondoId, fecha:todayISO(), concepto:'Consumo de provisión: '+mov.concepto, monto:-Math.abs(mov.monto), tipo:'gasto' });
+  saveData(); refreshEverythingFinanzas();
+  showToast('Provisión aplicada como consumido');
 }
 function delMov(id){
   const mov = state.movimientos.find(m=>m.id===id);
@@ -1622,67 +1790,129 @@ function renderFlujo(){
     ? 'Este bolsillo SÍ está incluido en el cálculo de ingresos y gastos del mes.'
     : 'Este bolsillo NO está incluido en el cálculo de ingresos y gastos del mes (cámbialo con la casilla de arriba).';
 
-  const now = new Date();
-  const monthPrefix = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const monthPrefix = state.current;
   const movsMes = state.movimientos.filter(m=>m.fondoId===flujoFondoActual && m.fecha.startsWith(monthPrefix));
   const ingresosMes = fondo.incluirCalculo ? movsMes.filter(m=>m.monto>0).reduce((a,m)=>a+m.monto,0) : 0;
   const gastosMes = fondo.incluirCalculo ? Math.abs(movsMes.filter(m=>m.monto<0).reduce((a,m)=>a+m.monto,0)) : 0;
   document.getElementById('flujoIngresosMes').textContent = fmt(ingresosMes);
   document.getElementById('flujoGastosMes').textContent = fmt(gastosMes);
 
-  const list = state.movimientos.filter(m=>m.fondoId===flujoFondoActual).sort((a,b)=>b.fecha.localeCompare(a.fecha));
-  const wrap = document.getElementById('movList');
-  if(list.length===0){
-    wrap.innerHTML = '<div class="empty">Sin movimientos todavía en este fondo.</div>';
-  } else {
-    wrap.innerHTML = list.map(m=>`
-      <div class="mov-item">
-        <div class="info"><div class="t">${m.concepto}</div><div class="d">${formatDateHuman(m.fecha)} · ${m.tipo}</div></div>
-        <div class="monto ${m.monto>=0?'pos':'neg'}">${m.monto>=0?'+':''}${fmt(m.monto)}</div>
-        <button class="del2" data-delmov="${m.id}">✕</button>
-      </div>`).join('');
-    wrap.querySelectorAll('[data-delmov]').forEach(b=>b.addEventListener('click', ()=>delMov(b.dataset.delmov)));
-  }
+  const provisionMes = movsMes.filter(m=>m.tipo==='provision').reduce((a,m)=>a+m.monto,0);
+  const consumoMes = Math.abs(movsMes.filter(m=>m.tipo==='gasto').reduce((a,m)=>a+m.monto,0));
+  document.getElementById('flujoProvisionMes').textContent = fmt(provisionMes);
+  document.getElementById('flujoConsumoMes').textContent = fmt(consumoMes);
+  document.getElementById('flujoProvisionDisponible').textContent = fmt(provisionMes - consumoMes);
+  document.getElementById('flujoSaldoInicial').textContent = fmt(saldoInicialBolsilloMes(flujoFondoActual, state.current));
+  document.getElementById('flujoSaldoDespuesProvision').textContent = fmt(saldoInicialBolsilloMes(flujoFondoActual, state.current) + provisionMes);
+  document.getElementById('flujoSaldoFinalMes').textContent = fmt(saldoFinalBolsilloMes(flujoFondoActual, state.current));
+
   renderAuxiliarContable(fondo);
 }
 function renderAuxiliarContable(fondo){
   const tbody = document.getElementById('tbl-auxiliar');
   if(!tbody) return;
+  const tipoLabel = { ingreso:'ingreso', gasto:'gasto', provision:'provisión', transferencia:'transferencia' };
   const list = state.movimientos
     .filter(m=>m.fondoId===flujoFondoActual)
     .slice()
     .sort((a,b)=> a.fecha===b.fecha ? 0 : a.fecha.localeCompare(b.fecha));
-  let saldo = fondo.saldoInicial || 0;
+  const saldoInicial = fondo.saldoInicial || 0;
   if(list.length===0){
-    tbody.innerHTML = `<tr><td colspan="5" class="empty">Sin movimientos — saldo inicial ${fmt(saldo)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="empty">Sin movimientos — saldo inicial ${fmt(saldoInicial)}</td></tr>`;
     return;
   }
-  let rowsHtml = `<tr><td colspan="2"><b>Saldo inicial</b></td><td class="num"></td><td class="num"></td><td class="num"><b>${fmt(saldo)}</b></td></tr>`;
-  list.forEach(m=>{
+  // Se calcula el saldo acumulado de más viejo a más nuevo (así debe ser la cuenta),
+  // pero se muestra de más nuevo a más viejo, que es más útil para revisar de un vistazo.
+  let saldoCorrido = saldoInicial;
+  const filas = list.map(m=>{
     const entrada = m.monto>0 ? m.monto : 0;
     const salida = m.monto<0 ? Math.abs(m.monto) : 0;
-    saldo += m.monto;
+    saldoCorrido += m.monto;
+    return { m, entrada, salida, saldo: saldoCorrido };
+  });
+  let rowsHtml = `<tr><td colspan="2"><b>Saldo inicial</b></td><td class="num"></td><td class="num"></td><td class="num"><b>${fmt(saldoInicial)}</b></td><td></td></tr>`;
+  filas.slice().reverse().forEach(f=>{
+    const m = f.m;
     rowsHtml += `<tr>
       <td>${formatDateHuman(m.fecha)}</td>
-      <td>${m.concepto}</td>
-      <td class="num">${entrada ? fmt(entrada) : ''}</td>
-      <td class="num">${salida ? fmt(salida) : ''}</td>
-      <td class="num">${fmt(saldo)}</td>
+      <td>${m.concepto}<div class="hint" style="margin:0;">${tipoLabel[m.tipo]||m.tipo}</div></td>
+      <td class="num">${f.entrada ? fmt(f.entrada) : ''}</td>
+      <td class="num">${f.salida ? fmt(f.salida) : ''}</td>
+      <td class="num">${fmt(f.saldo)}</td>
+      <td class="num" style="white-space:nowrap;">
+        ${m.tipo==='provision' ? `<button class="row-abono-btn" data-aplicarprov="${m.id}" title="Aplicar a consumido">✅</button>` : ''}
+        <button class="del2" data-delmov="${m.id}">✕</button>
+      </td>
     </tr>`;
   });
   tbody.innerHTML = rowsHtml;
+  tbody.querySelectorAll('[data-delmov]').forEach(b=>b.addEventListener('click', ()=>delMov(b.dataset.delmov)));
+  tbody.querySelectorAll('[data-aplicarprov]').forEach(b=>b.addEventListener('click', ()=>aplicarProvisionAConsumido(b.dataset.aplicarprov)));
 }
 function renderDeudas(){
   const tbody = document.getElementById('tbl-deudas'); tbody.innerHTML='';
   currentMonth().deudas.forEach(r=>{
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td><input class="txt" value="${r.entidad}"></td><td><input type="number" value="${r.tasa}"></td><td><input type="number" value="${r.cuota}"></td><td><input type="number" value="${r.saldo}"></td><td><button class="row-del">✕</button></td>`;
-    const [e,t,c,s] = tr.querySelectorAll('input');
-    bindText(e,r,'entidad'); bindNumber(t,r,'tasa'); bindNumber(c,r,'cuota'); bindNumber(s,r,'saldo');
+    tr.innerHTML = `<td><input class="txt" value="${r.entidad}"></td><td><input type="number" inputmode="decimal" value="${r.tasa}"></td><td><input type="text" class="money" value="${r.cuota}"></td><td><input type="text" class="money" value="${r.saldo}"></td><td><button class="row-abono-btn" data-pagardeuda="${r.id}" title="Pagar desde un bolsillo">💳</button></td><td><button class="row-del">✕</button></td>`;
+    const [e] = tr.querySelectorAll('input.txt');
+    const t = tr.querySelector('input[type="number"]');
+    const [c,s] = tr.querySelectorAll('input.money');
+    bindText(e,r,'entidad'); bindNumber(t,r,'tasa'); bindMoneyInput(c,r,'cuota'); bindMoneyInput(s,r,'saldo');
+    tr.querySelector('[data-pagardeuda]').addEventListener('click', ()=>openPagoDesdeBolsillo('deuda', r.id));
     tr.querySelector('.row-del').onclick=()=>delRow('deudas', r.id);
     tbody.appendChild(tr);
   });
 }
+/* Descuenta el pago de una deuda simple o de la tarjeta de crédito directamente de un
+   bolsillo: resta el saldo de la deuda/tarjeta Y crea el gasto real en el bolsillo elegido. */
+let pagoDesdeBolsilloContext = null;
+function openPagoDesdeBolsillo(tipo, rowId){
+  const fondos = flattenFondos();
+  if(fondos.length===0){ showToast('Crea un bolsillo primero en Bancos'); return; }
+  pagoDesdeBolsilloContext = { tipo, rowId };
+  const sel = document.getElementById('pagoDesdeBolsilloFondo');
+  sel.innerHTML = fondos.map(f=>`<option value="${f.id}">${f.bancoNombre} · ${f.nombre}</option>`).join('');
+  let titulo, saldoActual, hint;
+  if(tipo==='tarjeta'){
+    titulo = 'Pagar tarjeta de crédito';
+    saldoActual = currentMonth().tarjeta.deuda||0;
+    hint = 'Se resta del bolsillo elegido y se descuenta de la deuda de tu tarjeta.';
+  } else {
+    const row = currentMonth().deudas.find(d=>d.id===rowId);
+    titulo = 'Pagar deuda: ' + (row?row.entidad:'');
+    saldoActual = row ? row.saldo : 0;
+    hint = 'Se resta del bolsillo elegido y se descuenta del saldo de esta deuda.';
+  }
+  document.getElementById('pagoDesdeBolsilloTitle').textContent = titulo;
+  document.getElementById('pagoDesdeBolsilloMonto').value = '';
+  document.getElementById('pagoDesdeBolsilloHint').textContent = hint + ' Saldo actual: ' + fmt(saldoActual);
+  openModal('pagoDesdeBolsilloModalBg');
+}
+document.getElementById('pagoDesdeBolsilloBtn').addEventListener('click', ()=>{
+  if(!pagoDesdeBolsilloContext) return;
+  const { tipo, rowId } = pagoDesdeBolsilloContext;
+  const fondoId = document.getElementById('pagoDesdeBolsilloFondo').value;
+  const monto = parseFloat(document.getElementById('pagoDesdeBolsilloMonto').value);
+  if(!fondoId){ showToast('Elige un bolsillo'); return; }
+  if(!monto || monto<=0){ showToast('Escribe un valor válido'); return; }
+  const m = currentMonth();
+  let concepto;
+  if(tipo==='tarjeta'){
+    concepto = 'Pago tarjeta de crédito';
+    m.tarjeta.deuda = Math.max(0, (m.tarjeta.deuda||0) - monto);
+  } else {
+    const row = m.deudas.find(d=>d.id===rowId);
+    if(!row) return;
+    concepto = 'Pago deuda: ' + row.entidad;
+    row.saldo = Math.max(0, (row.saldo||0) - monto);
+  }
+  state.movimientos.push({ id:uid(), fondoId, fecha:todayISO(), concepto, monto:-Math.abs(monto), tipo:'gasto' });
+  saveData();
+  closeModal('pagoDesdeBolsilloModalBg');
+  refreshEverythingFinanzas();
+  showToast('Pago registrado y descontado');
+});
+
 function totals(){
   const m = currentMonth();
   const ingreso = m.ingresos.reduce((a,r)=>a+(r.ingresado||0),0);
@@ -1916,13 +2146,32 @@ function renderUpcoming(){
 }
 
 /* ================= NOTIFICACIONES (mejor esfuerzo, app abierta/reciente) ================= */
+function isStandalonePWA(){
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
 function requestNotifPermission(){
-  if(!('Notification' in window)){ showToast('Este navegador no soporta notificaciones'); return; }
-  Notification.requestPermission().then(p=>{
-    document.getElementById('notifStatus').textContent = p==='granted'
-      ? 'Notificaciones activadas en este dispositivo. Recuerda dejar la app añadida a la pantalla de inicio.'
-      : 'No se activaron las notificaciones. Puedes intentarlo de nuevo cuando quieras.';
-  });
+  const statusEl = document.getElementById('notifStatus');
+  if(!('Notification' in window)){
+    statusEl.textContent = 'Este navegador no admite notificaciones aquí. En iPhone, primero añade la app a la pantalla de inicio (Safari → Compartir → "Añadir a pantalla de inicio") y ábrela desde ese ícono.';
+    return;
+  }
+  if(!isStandalonePWA()){
+    statusEl.textContent = '⚠️ Estás usando la app desde el navegador, no desde el ícono instalado. En iPhone, las notificaciones SOLO funcionan si la app está añadida a la pantalla de inicio y la abres desde ese ícono — no desde Safari normal. Añádela y vuelve a intentar aquí.';
+    return;
+  }
+  try{
+    Notification.requestPermission().then(p=>{
+      statusEl.textContent = p==='granted'
+        ? '✅ Notificaciones activadas en este dispositivo.'
+        : (p==='denied'
+          ? '❌ Bloqueaste las notificaciones. Para activarlas: Ajustes del iPhone → busca esta app (o Safari) → Notificaciones → permitir.'
+          : 'No se activaron. Puedes intentarlo de nuevo cuando quieras.');
+    }).catch(err=>{
+      statusEl.textContent = 'No se pudo pedir el permiso (' + err.message + ').';
+    });
+  }catch(err){
+    statusEl.textContent = 'Este dispositivo no permite notificaciones locales, aunque esté instalada.';
+  }
 }
 function checkDueNotifications(){
   if(!('Notification' in window) || Notification.permission!=='granted') return;
@@ -2759,6 +3008,17 @@ function renderCreditoEditor(){
           : 'Define desde qué número de cuota quieres empezar a pagar un abono extra fijo a capital, y ese valor se sumará automáticamente en esa cuota y en todas las siguientes hasta el final del crédito. Déjalo en 0 para desactivarlo.'}</div>
       </div></div>
     </section>
+    <section>
+      <h2 class="section-title">Abono a capital en varios meses</h2>
+      <div class="card"><div class="card-body">
+        <div class="field-grid">
+          <div><label>Meses (separados por coma, ej: 5, 8, 12)</label><input type="text" id="cAbonoVariosMeses" placeholder="Ej: 5, 8, 12"></div>
+          <div><label>Valor del abono en cada uno (pesos)</label><input type="number" min="0" id="cAbonoVariosValor" placeholder="Ej: 500000"></div>
+        </div>
+        <button class="btn btn-primary btn-sm" id="cAbonoVariosBtn" style="margin-top:8px;">Aplicar a esos meses</button>
+        <div class="hint" style="margin-top:8px;">Aplica el mismo abono extra a capital en varios meses de una sola vez, en lugar de abrir "+ Abonar" mes por mes en la tabla.</div>
+      </div></div>
+    </section>
   `;
 
   if(isUVR){
@@ -2794,7 +3054,7 @@ function renderCreditoEditor(){
             <div><label>UVR real de hoy (consultada en banrep.gov.co)</label><input type="number" step="0.0001" id="cUvrHoy" placeholder="Ej: 416.5435"></div>
           </div>
           <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
-            <button class="btn btn-primary btn-sm" id="cUvrHoyBtn">Usar como UVR del mes ${mesActual} y recalcular en adelante</button>
+            <button class="btn btn-primary btn-sm" id="cUvrHoyBtn">🔄 Actualizar toda la tabla con este valor</button>
             <a class="btn btn-ghost btn-sm" href="https://www.banrep.gov.co/es/glosario/uvr" target="_blank" rel="noopener">Consultar UVR oficial ↗</a>
           </div>
           ${credito.correccionesUvr[mesActual]!==undefined ? `<div class="hint" style="margin-top:8px;">Ya recalibraste el mes ${mesActual} con UVR real = ${credito.correccionesUvr[mesActual]}. <button class="row-abono-btn" id="cUvrHoyClearBtn">Quitar</button></div>` : ''}
@@ -2841,7 +3101,7 @@ function renderCreditoEditor(){
       if(!val || val<=0){ showToast('Escribe un valor UVR válido'); return; }
       credito.correccionesUvr[mesActual] = val;
       saveData(); renderCreditoEditor();
-      showToast('UVR real aplicada desde el mes ' + mesActual);
+      showToast('Listo — toda la tabla de amortización se recalculó desde el mes ' + mesActual + ' en adelante');
     });
     const uvrHoyClearBtn = document.getElementById('cUvrHoyClearBtn');
     if(uvrHoyClearBtn) uvrHoyClearBtn.addEventListener('click', ()=>{
@@ -2936,6 +3196,17 @@ function renderCreditoEditor(){
   }
   document.getElementById('cAbonoRecDesde').addEventListener('input', e=>{ credito.anticipoRecDesde = parseInt(e.target.value)||0; saveData(); renderCreditoEditor(); });
   document.getElementById('cAbonoRecValor').addEventListener('input', e=>{ credito.anticipoRecValor = parseFloat(e.target.value)||0; saveData(); renderCreditoEditor(); });
+  const abonoVariosBtn = document.getElementById('cAbonoVariosBtn');
+  if(abonoVariosBtn) abonoVariosBtn.addEventListener('click', ()=>{
+    const mesesRaw = document.getElementById('cAbonoVariosMeses').value;
+    const valor = parseFloat(document.getElementById('cAbonoVariosValor').value);
+    const meses = mesesRaw.split(',').map(s=>parseInt(s.trim(),10)).filter(n=>!isNaN(n) && n>0);
+    if(meses.length===0){ showToast('Escribe al menos un número de mes, ej: 5, 8, 12'); return; }
+    if(!valor || valor<=0){ showToast('Escribe un valor válido'); return; }
+    meses.forEach(mes=>{ credito.anticipos[mes] = valor; });
+    saveData(); renderCreditoEditor(); renderCreditosSummary();
+    showToast('Abono aplicado a ' + meses.length + ' mes(es)');
+  });
 
   wrap.querySelectorAll('.row-abono-btn[data-mes]').forEach(btn=>{
     btn.addEventListener('click', ()=> openAbonoModal('anticipo', credito, btn.dataset.mes));
