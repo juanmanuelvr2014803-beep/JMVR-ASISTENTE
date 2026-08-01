@@ -1071,6 +1071,13 @@
       <div class="hint">Exporta un archivo .json con todos tus datos (finanzas, calendario, pendientes, diario). Guárdalo en tu Google Drive manualmente desde la app Archivos para tener respaldo en la nube.</div>
     </div>
 
+    <div class="settings-section">
+      <h4>Respaldo automático diario</h4>
+      <div class="hint" id="backupDiarioInfo">Sin respaldo automático todavía en este dispositivo.</div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="restaurarRespaldoDiario()">↩️ Restaurar este respaldo</button>
+      <div class="hint" style="margin-top:6px;">La app guarda solo una copia extra por día, separada de tus datos en vivo. Úsala si algo se ve mal después de una actualización — no reemplaza la nube ni el respaldo manual, es una tercera capa de seguridad.</div>
+    </div>
+
     <div class="actions">
       <button class="btn btn-ghost" style="flex:1;" onclick="closeModal('settingsModalBg')">Cerrar</button>
     </div>
@@ -1160,11 +1167,28 @@ function loadData(){
   catch(e){ console.warn('storage no disponible', e); }
   return {};
 }
+const BACKUP_KEY = 'jmvr_asistente_v1_backup_daily';
+/* Guarda un respaldo aparte, como mucho una vez al día, en OTRA clave de localStorage
+   distinta a la que usa la app en vivo. Sirve como punto de recuperación si el dato
+   "en vivo" se llega a dañar por un error de migración, una sincronización mala, etc.
+   (No protege contra borrar todo el sitio del navegador — para eso solo sirve la nube
+   o exportar el respaldo manual desde Ajustes). */
+function actualizarRespaldoDiario(){
+  try{
+    const hoy = todayISO();
+    const raw = localStorage.getItem(BACKUP_KEY);
+    const actual = raw ? JSON.parse(raw) : null;
+    if(!actual || actual.fecha !== hoy){
+      localStorage.setItem(BACKUP_KEY, JSON.stringify({ fecha: hoy, data: state }));
+    }
+  }catch(e){ console.warn('no se pudo actualizar el respaldo diario', e); }
+}
 let suppressCloudPush = false;
 function saveData(){
   state.updatedAtLocal = new Date().toISOString();
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
   catch(e){ console.warn('no se pudo guardar', e); }
+  actualizarRespaldoDiario();
   if(!suppressCloudPush && window.pushToCloud) window.pushToCloud();
 }
 
@@ -3779,9 +3803,32 @@ function renderPagos(){
   }));
 }
 /* ================= AJUSTES / PERFIL / RESPALDO ================= */
+function restaurarRespaldoDiario(){
+  let b;
+  try{
+    const raw = localStorage.getItem(BACKUP_KEY);
+    b = raw ? JSON.parse(raw) : null;
+  }catch(e){ b = null; }
+  if(!b){ showToast('No hay respaldo automático guardado en este dispositivo'); return; }
+  confirmAction('Vas a reemplazar TODOS los datos actuales por el respaldo del ' + formatDateHuman(b.fecha) + '. Lo que hayas cambiado después de esa fecha se perderá. ¿Continuar?', ()=>{
+    state = b.data;
+    if(!state.months) state.months = {};
+    saveData();
+    renderEverything();
+    showToast('Respaldo restaurado');
+  }, 'Restaurar respaldo automático');
+}
 function openSettings(){
   const vEl = document.getElementById('appVersionTag');
   if(vEl) vEl.textContent = APP_BUILD;
+  const backupInfoEl = document.getElementById('backupDiarioInfo');
+  if(backupInfoEl){
+    try{
+      const raw = localStorage.getItem(BACKUP_KEY);
+      const b = raw ? JSON.parse(raw) : null;
+      backupInfoEl.textContent = b ? ('Último respaldo automático: ' + formatDateHuman(b.fecha)) : 'Sin respaldo automático todavía en este dispositivo.';
+    }catch(e){ backupInfoEl.textContent = 'No se pudo leer el respaldo automático.'; }
+  }
   document.getElementById('cfgAppPinEnabled').checked = !!state.perfil.appPinEnabled;
   document.getElementById('cfgAppPin').value = state.perfil.appPin || '';
   document.getElementById('cfgAppPinConfirm').value = state.perfil.appPin || '';
@@ -4144,3 +4191,4 @@ try{
 </script>
 </body>
 </html>
+
